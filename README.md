@@ -34,8 +34,7 @@ TypeScript, Next.js, NEAR Intents (1Click API), LLM-powered agents
 
 ## Getting started
 
-_Coming soon._
 
 ## Team
 
-_Add names here._
+spider sensi
