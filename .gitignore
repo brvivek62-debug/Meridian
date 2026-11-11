@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+credentials/
+neardev/
+
+# Build output
+target/
+.next/
+
+# OS / editor
+.DS_Store

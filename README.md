@@ -1,40 +1,83 @@
 # Meridian
 
-**Every agent, every chain, one market.**
+**The line your agents can't cross.**
 
-Meridian is a borderless marketplace where AI agents discover, hire,
-negotiate with and pay each other. A buyer pays with whatever asset it
-holds, and the worker gets paid in whatever asset and chain it prefers.
-Settlement runs through NEAR Intents.
+Meridian gives AI agents delegated financial authority on NEAR. Funds sit in an on-chain Vault contract. Each agent gets a mandate (budget, per-transaction cap, daily cap, vendor allowlist, approval threshold) and holds only a function-call access key restricted to the Vault, so it cannot move money except through the Vault's policy checks.
 
-Built for the "Give AI a wallet" track (Agent Economy).
+Built at NEAR HACKATHON. Tracks: `agents`, `security`, `swarms`.
 
-## Why Meridian
+> Status: work in progress. See [Progress](#progress).
 
-Most agent marketplaces settle in a single stablecoin on a single chain.
-Meridian makes payment asset-agnostic and global:
+## Problem
 
-- **Open registry**: anyone can list an agent with a price, endpoint and preferred payout asset/chain
-- **Pay in any asset**: cross-asset, cross-chain settlement via NEAR Intents
-- **Negotiation**: a manager agent collects quotes and haggles before hiring
-- **Trust layer**: output verification, escrow-style release or refund, reputation scores
-- **Safety rails**: per-task spend caps, human approval above a threshold, dry-run mode
+_TODO_
 
-## How it works
+## Solution
 
-1. A user gives the manager agent a task and a budget
-2. The manager requests quotes from registered worker agents and negotiates
-3. It picks the best deal and pays through NEAR Intents
-4. A checker validates the output, then payment is released or refunded
-5. The dashboard shows balances, transcripts and every payment
+_TODO_ — mandates, spending limits, policy engine, sandboxed wallets via function-call keys, escrow, sub-mandates, Chain Signatures, NEAR Intents (1Click).
 
-## Tech stack
+## Architecture
 
-TypeScript, Next.js, NEAR Intents (1Click API), LLM-powered agents
+_TODO: Mermaid diagram._
 
-## Getting started
+```
+contracts/vault/   Rust Vault contract (near-sdk, cargo-near) → NEAR testnet
+agent/             TypeScript LLM agent loop + NEAR client
+vendors/           Paid API (HTTP 402) + worker agents
+dashboard/         Next.js + Tailwind dashboard
+scripts/           Deploy, seed, demo-run scripts
+```
 
+## Trust model
+
+_TODO: what is enforced on-chain vs. off-chain._
+
+## Run locally
+
+_TODO: "do X → see Y" steps._
+
+1. `cp .env.example .env` and fill in values.
+
+## Deployments and proofs
+
+| Item | Value |
+|---|---|
+| Vault contract (testnet) | _TODO_ |
+| Hosted demo | _TODO_ |
+| Demo video | _TODO_ |
+| Chain Signatures payment (Sepolia) tx | _TODO_ |
+| NEAR Intents swap (mainnet) tx | _TODO_ |
+
+## Libraries, templates and tools used
+
+- AI coding tools: this project is built with Claude Code.
+- _TODO: full list of libraries and templates._
+
+## Roadmap
+
+_TODO_
 
 ## Team
 
 spider sensi
+
+## License
+
+[MIT](LICENSE)
+
+## Progress
+
+### MUST
+- [x] M1 Repo scaffold, `.gitignore`, `.env.example`, README skeleton
+- [ ] M2 Vault contract: mandates, `pay`, policy checks, receipts, tests
+- [ ] M3 Pending approvals, sub-mandates, escrow, revoke, tests
+- [ ] M4 Testnet deploy, `scripts/deploy.ts`, `scripts/seed.ts`
+- [ ] M5 Agent with restricted function-call key + paid-API 402 flow
+- [ ] M6 Worker agents, bidding, counter-offer, escrow release
+- [ ] M7 Dashboard: create mandate, live receipts, approvals, attack button
+- [ ] M8 `scripts/demo.ts` runs the full demo in one command
+
+### SHOULD
+- [ ] S1 Chain Signatures Sepolia payment via `authorize_foreign_payment`
+- [ ] S2 1Click quote in live flow + one real mainnet swap recorded
+- [ ] S3 Delegation tree visualization
