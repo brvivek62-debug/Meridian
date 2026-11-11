@@ -38,6 +38,16 @@ _TODO: "do X → see Y" steps._
 
 1. `cp .env.example .env` and fill in values.
 
+### Vault contract: build and test
+
+```bash
+cd contracts/vault
+cargo near build non-reproducible-wasm   # → target/near/vault.wasm
+cargo test                               # 11 unit tests + 3 sandbox tests
+```
+
+Sandbox tests use `near-sandbox` + `near-api` (what `cargo near new` generates now, in place of `near-workspaces`) and run on Apple Silicon. The 24h daily-cap rollover is unit-tested with `testing_env!` rather than sandbox-tested: sandbox `fast_forward` moves the clock only ~0.4 s per block here, so 24h would take ~35 min per run. Details: [contracts/vault/README.md](contracts/vault/README.md).
+
 ## Deployments and proofs
 
 | Item | Value |
@@ -51,7 +61,9 @@ _TODO: "do X → see Y" steps._
 ## Libraries, templates and tools used
 
 - AI coding tools: this project is built with Claude Code.
-- _TODO: full list of libraries and templates._
+- `cargo near new` project template (Vault scaffold)
+- Rust: `near-sdk` 5.30; tests: `near-sandbox`, `near-api`, `cargo-near-build`, `tokio`, `testresult`
+- _TODO: remaining libraries as they are added._
 
 ## Roadmap
 
@@ -69,7 +81,7 @@ spider sensi
 
 ### MUST
 - [x] M1 Repo scaffold, `.gitignore`, `.env.example`, README skeleton
-- [ ] M2 Vault contract: mandates, `pay`, policy checks, receipts, tests
+- [x] M2 Vault contract: mandates, `pay`, policy checks, receipts, tests
 - [ ] M3 Pending approvals, sub-mandates, escrow, revoke, tests
 - [ ] M4 Testnet deploy, `scripts/deploy.ts`, `scripts/seed.ts`
 - [ ] M5 Agent with restricted function-call key + paid-API 402 flow
