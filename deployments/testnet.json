@@ -1,0 +1,37 @@
+{
+  "network": "testnet",
+  "owner": "vivek-meridian.testnet",
+  "accounts": {
+    "vault": "vault.vivek-meridian.testnet",
+    "agent": "agent.vivek-meridian.testnet",
+    "workerScraper": "worker-scraper.vivek-meridian.testnet",
+    "workerSummarizer": "worker-summarizer.vivek-meridian.testnet",
+    "paidApi": "paid-api.vivek-meridian.testnet"
+  },
+  "createTxs": {
+    "vault": "BATJ6nSABhTpYY9BYeFGL8KGvrkQ5DxZqfXg1Ado3ebd",
+    "agent": "5TAq7FtbxfznDiFqnvtLdiHbAw6r1QCdN4w5jVivP95u",
+    "workerScraper": "7CFgGKctHdDbcU9BJcQ37iQrPJ3e83LYhAU2Rw5nsKZH",
+    "workerSummarizer": "GdnKFUYUpsU4YY1coLTgabnnhr2ABGhCCBg5eAZ78XGd",
+    "paidApi": "EnGPmEDC5r2xE68LJR9VZ8tGrUFqjuGvZDQ1ocv5WJzy"
+  },
+  "vault": {
+    "contractId": "vault.vivek-meridian.testnet",
+    "codeHash": "42ZeciXtgZtd2UKKi88WMzUcg7RPgnG6pxYjGqE1Rn3M",
+    "deployTx": "FVrP5cmZLQms5NfGW1wDSdAPHYPZ22q39tTPg2jrGFR5",
+    "deployedAt": "2026-11-11T09:24:04.876Z"
+  },
+  "seed": {
+    "mandateId": 0,
+    "agent": "agent.vivek-meridian.testnet",
+    "budget": "5 NEAR",
+    "createMandateTx": "9DZkqxPYUj8VjX6jdBu5Sr3Njftn744nTRopyK4PbpY7",
+    "payment": {
+      "to": "paid-api.vivek-meridian.testnet",
+      "amount": "0.1 NEAR",
+      "receiptId": 0,
+      "tx": "CKLuXywEZAq6qL3zRBnZrYkDxguWADzPHTuPotMpfzqW"
+    },
+    "seededAt": "2026-11-11T09:25:23.827Z"
+  }
+}

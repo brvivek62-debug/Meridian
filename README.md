@@ -38,7 +38,8 @@ scripts/           Deploy, seed, demo-run scripts
 - The owner can `revoke` a mandate at any time. It deactivates the whole subtree and refunds the unspent budget.
 
 ### Not enforced on-chain (yet)
-- **Agent key restriction.** The claim that an agent holds only a function-call key for the Vault is set up off-chain by `scripts/setup-agent-key.ts` (M5). It is verifiable on-chain by listing the agent account's access keys.
+- **Agent key restriction.** The claim that an agent holds only a function-call key for the Vault is set up off-chain by `scripts/setup-agent-key.ts` (M5). It is verifiable on-chain by listing the agent account's access keys. **Until M5, `agent.vivek-meridian.testnet` still has a full-access key** (created by `npm run deploy`).
+- **Contract upgrades.** `vault.vivek-meridian.testnet` keeps a full-access key held by the deployer, so the deployer can replace the code. The on-chain code hash is listed under [Deployments and proofs](#deployments-and-proofs) for anyone to check. A production Vault would remove that key or hand upgrades to a DAO.
 - **Delivery.** The Vault does not know whether a vendor delivered what was paid for. Paid-API access is verified by the vendor, off-chain. Escrow release is the poster agent's decision (or the owner's).
 - **Combined daily spend across a delegation tree.** Daily caps are per mandate. A parent and its sub-mandates can together spend more in one day than the parent's daily cap, though never more than the parent's total budget.
 - **Pending payments do not reserve funds.** That is why `approve` re-checks the policy.
@@ -68,11 +69,33 @@ cargo test                               # unit tests + sandbox tests
 
 Sandbox tests use `near-sandbox` + `near-api` (what `cargo near new` generates now, in place of `near-workspaces`) and run on Apple Silicon. The 24h daily-cap rollover is unit-tested with `testing_env!` rather than sandbox-tested: sandbox `fast_forward` moves the clock only ~0.4 s per block here, so 24h would take ~35 min per run. Details: [contracts/vault/README.md](contracts/vault/README.md).
 
+### Deploy to testnet and seed
+
+Requires Node ≥ 20, [near-cli-rs](https://github.com/near/near-cli-rs), and a funded testnet owner account whose key is in the near-cli-rs keychain.
+
+```bash
+npm install
+cp .env.example .env        # set OWNER_ACCOUNT_ID=<you>.testnet
+(cd contracts/vault && cargo near build non-reproducible-wasm)
+npm run deploy              # → creates vault/agent/worker-scraper/worker-summarizer/paid-api.<owner>, deploys the Vault
+npm run seed                # → owner creates a 5 NEAR mandate, agent pays 0.1 NEAR to paid-api: prints "Paid"
+```
+
+Both scripts are idempotent: a re-run skips accounts, code and the seed mandate that already exist. They write public account ids and tx hashes to [`deployments/testnet.json`](deployments/testnet.json). The scripts refuse to run unless `NEAR_NETWORK=testnet`.
+
+**Keys.** The owner's key never leaves the near-cli-rs keychain: owner transactions (account creation, `create_mandate`) are signed by `near ... sign-with-keychain`. Each demo account gets a new key, written only to `~/.near-credentials/testnet/<account>.json` (mode 600). No key is in this repository or in `.env`.
+
+The deploy funds the Vault with 3 NEAR: ~2.46 NEAR covers code storage (245 KB) and the rest pays for mandate and receipt storage. The seed needs 5 NEAR for the mandate and keeps a 3 NEAR reserve in the owner (`SEED_OWNER_RESERVE`). If the owner is short, get testnet NEAR from a faucet (see [Q-008](HACKATHON.md)).
+
 ## Deployments and proofs
 
 | Item | Value |
 |---|---|
-| Vault contract (testnet) | _TODO_ |
+| Vault contract (testnet) | [`vault.vivek-meridian.testnet`](https://testnet.nearblocks.io/address/vault.vivek-meridian.testnet), code hash `42ZeciXtgZtd2UKKi88WMzUcg7RPgnG6pxYjGqE1Rn3M` |
+| Vault deploy tx | [`FVrP5cmZ…GFR5`](https://testnet.nearblocks.io/txns/FVrP5cmZLQms5NfGW1wDSdAPHYPZ22q39tTPg2jrGFR5) |
+| Seed mandate (5 NEAR, id 0) | [`9DZkqxPY…bpY7`](https://testnet.nearblocks.io/txns/9DZkqxPYUj8VjX6jdBu5Sr3Njftn744nTRopyK4PbpY7) |
+| Test payment, 0.1 NEAR agent → paid-api (`Paid`) | [`CKLuXywE…pfzqW`](https://testnet.nearblocks.io/txns/CKLuXywEZAq6qL3zRBnZrYkDxguWADzPHTuPotMpfzqW) |
+| Demo accounts (testnet) | `agent`, `worker-scraper`, `worker-summarizer`, `paid-api` `.vivek-meridian.testnet`; all ids and creation txs in [`deployments/testnet.json`](deployments/testnet.json) |
 | Hosted demo | _TODO_ |
 | Demo video | _TODO_ |
 | Chain Signatures payment (Sepolia) tx | _TODO_ |
@@ -83,6 +106,7 @@ Sandbox tests use `near-sandbox` + `near-api` (what `cargo near new` generates n
 - AI coding tools: this project is built with Claude Code.
 - `cargo near new` project template (Vault scaffold)
 - Rust: `near-sdk` 5.30; tests: `near-sandbox`, `near-api`, `cargo-near-build`, `tokio`, `testresult`
+- Node scripts: `near-api-js` 7.4, `tsx`, `dotenv`, `typescript`; `near-cli-rs` for owner-signed transactions
 - _TODO: remaining libraries as they are added._
 
 ## Roadmap
@@ -103,7 +127,7 @@ spider sensi
 - [x] M1 Repo scaffold, `.gitignore`, `.env.example`, README skeleton
 - [x] M2 Vault contract: mandates, `pay`, policy checks, receipts, tests
 - [x] M3 Pending approvals, sub-mandates, escrow, revoke, tests
-- [ ] M4 Testnet deploy, `scripts/deploy.ts`, `scripts/seed.ts`
+- [x] M4 Testnet deploy, `scripts/deploy.ts`, `scripts/seed.ts`
 - [ ] M5 Agent with restricted function-call key + paid-API 402 flow
 - [ ] M6 Worker agents, bidding, counter-offer, escrow release
 - [ ] M7 Dashboard: create mandate, live receipts, approvals, attack button
