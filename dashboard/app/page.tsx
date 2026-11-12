@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { DemoModeBadge, RoleBadge } from '@/components/Badge';
 import { ApprovalsInbox } from '@/components/ApprovalsInbox';
@@ -99,6 +100,12 @@ export default function Page() {
           <p className="text-sm text-offwhite/50">The line your agents can&rsquo;t cross.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/break"
+            className="rounded-full border border-danger/40 bg-danger/10 px-3 py-1 font-mono text-xs uppercase tracking-wide text-danger transition-colors duration-150 hover:bg-danger/20"
+          >
+            Break Meridian &rarr;
+          </Link>
           <DemoModeBadge />
         </div>
       </header>

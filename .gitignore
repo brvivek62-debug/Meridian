@@ -14,5 +14,8 @@ target/
 .next/
 *.tsbuildinfo
 
+# Local /break challenge attempt history (JSON file store)
+dashboard/.data/
+
 # OS / editor
 .DS_Store

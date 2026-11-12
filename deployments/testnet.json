@@ -35,5 +35,13 @@
       "tx": "CKLuXywEZAq6qL3zRBnZrYkDxguWADzPHTuPotMpfzqW"
     },
     "seededAt": "2026-11-11T09:25:23.827Z"
+  },
+  "break": {
+    "accountId": "break-agent.vivek-meridian.testnet",
+    "ownerId": "demo-owner.vivek-meridian.testnet",
+    "mandateId": 6,
+    "budget": "2 NEAR",
+    "createMandateTx": "2eFPGKTDShHJZomzRJmvbgZTWj5foxoWweAtW3tBXuKS",
+    "createdAt": "2026-11-12T08:59:14.362Z"
   }
 }

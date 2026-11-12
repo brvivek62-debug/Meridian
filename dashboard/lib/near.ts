@@ -38,6 +38,10 @@ export const AGENT_ID = requireEnv('AGENT_ACCOUNT_ID');
 export const DEMO_OWNER_ID = process.env.DEMO_OWNER_ACCOUNT_ID;
 const DEMO_OWNER_KEY = process.env.DEMO_OWNER_PRIVATE_KEY;
 
+// --- /break challenge (see scripts/setup-break-agent.ts) ---
+export const BREAK_AGENT_ID = process.env.BREAK_AGENT_ACCOUNT_ID;
+export const BREAK_MANDATE_ID = process.env.BREAK_MANDATE_ID !== undefined ? Number(process.env.BREAK_MANDATE_ID) : undefined;
+
 /** View call — read-only, needs no key. */
 export async function view<T>(contractId: string, methodName: string, args: Record<string, unknown> = {}): Promise<T> {
   return (await provider.callFunction({ contractId, method: methodName, args })) as T;
