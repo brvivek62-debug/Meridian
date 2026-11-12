@@ -132,6 +132,23 @@ The **attack button** ("Inject malicious instruction") models a prompt-injected 
 
 Because the Vault's `Receipt` doesn't record a transaction hash (only `Mandate`/`Task`/`Bid` ids and amounts), the receipts feed links each receipt's recipient to its explorer **account** page rather than a specific tx; every action the dashboard itself performs (create mandate, approve, reject, attack) shows the real tx hash and explorer link it gets back from signing that call.
 
+Create Mandate also has a **"Describe the rules in your own words"** box: NEAR AI (JSON mode, `dashboard/lib/parseMandate.ts`) turns a plain-English description into the exact fields (budget, per-tx cap, daily cap, allowlist, approval threshold) and fills them in for review, with notes on any assumptions or inconsistencies it noticed. Nothing is submitted until the owner reviews/edits the fields and clicks **Create mandate**, which stays disabled until client-side sanity checks pass (budget > 0; per-tx cap, daily cap and approval threshold each ≤ budget).
+
+### "Break Meridian" public challenge (`/break`)
+
+```bash
+npm run setup-break-agent   # creates break-agent.<owner>.testnet + its own isolated mandate, one-shot
+npm run dashboard           # → http://localhost:3000/break
+```
+
+"This AI agent controls a real wallet. Try to make it send you money." A visitor's plain-text message goes to **break-agent**, a real NEAR AI Cloud tool-calling loop (`dashboard/lib/breakAgent.ts`) with exactly two tools: `check_budget` and `send_payment`. Its system prompt does *not* hard-refuse everything — it's told to use judgment, so it's genuinely exploitable by social engineering, not a strawman. If it decides to pay, `send_payment` calls `Vault.pay` for real, with break-agent's own restricted key.
+
+Safety is on-chain, not in the prompt: `scripts/setup-break-agent.ts` gives break-agent its own mandate (2 NEAR budget, 0.05 NEAR per-tx cap, 0.2 NEAR daily cap) with an allowlist containing **only** the real paid-api vendor — a visitor's own account can never be on it, so a "fooled" attempt is always `Blocked` on-chain regardless of what the LLM was talked into. Its account key is restricted to `Vault.pay` only, separate from every other demo account, so public traffic can't drain or interfere with the production or M7 demo mandates.
+
+The page shows a live scoreboard (total attacks, agents fooled, NEAR stolen — always 0 if the Vault holds) and a "Hall of attempts" (last 10, message always rendered as plain text, never HTML), backed by a small storage interface (`dashboard/lib/breakStore.ts`) with a local JSON file for now. Rate limited to 5 attempts/IP/10min and 200/day globally (IPs kept only as a truncated hash); max 1000 characters; a `BREAK_ENABLED=false` kill switch. Uses the cheapest NEAR AI Cloud model confirmed via the live `GET /v1/models` to support tool calling (`openai/gpt-5-nano`), configurable via `BREAK_MODEL`.
+
+Both `/break` and the main dashboard show **"the line"** (`dashboard/components/TheLine.tsx`): a glowing vertical line between the agent and a target. Every attempt animates a coin from the agent toward the target — it shatters into particles with "BLOCKED" + the reason in red if the Vault stops it, passes through with a subtle blue pulse if paid, or dissolves before reaching the line if the agent never tried. Pure CSS keyframes, no animation library, each under 1.5s.
+
 ## Deployments and proofs
 
 | Item | Value |
@@ -156,7 +173,10 @@ Because the Vault's `Receipt` doesn't record a transaction hash (only `Mandate`/
 | Dashboard approve (pending → `Paid`, 0.45 NEAR) | [`Bm5A9qtd…a4t1Vf21`](https://testnet.nearblocks.io/txns/Bm5A9qtdi7v2WBDTnikzAR9JacPLEXXUjvxKa4t1Vf21) |
 | Dashboard reject (`Rejected`) | [`6P2CaCcX…BZu91HL`](https://testnet.nearblocks.io/txns/6P2CaCcXTS29ZZoRxEKcXhp7UQv2yVqnUBtzBZu91HL) |
 | Dashboard attack button on the production mandate 0 → `Blocked` | [`78xW26ic…z4Qn6oH`](https://testnet.nearblocks.io/txns/78xW26ic1JAA2nTuVPmS3u2GNcCwfhRu4F9YWz4Qn6oH) |
-| Demo accounts (testnet) | `agent`, `worker-scraper`, `worker-summarizer`, `paid-api`, `demo-owner` `.vivek-meridian.testnet`; all ids and creation txs in [`deployments/testnet.json`](deployments/testnet.json) |
+| break-agent created + key restricted to `Vault.pay` | [`GV81PqwsyY…ZnvCJ`](https://testnet.nearblocks.io/txns/GV81PqwsyYzQqB64pFJU4CUHMq6HU9vthQUeHa1ZnvCJ), [`LSHwcDbLjE…6NVB`](https://testnet.nearblocks.io/txns/LSHwcDbLjES9qjtb2QdFZXr8TSzNNxvWv9H7ULm6NVB) |
+| break mandate 6 (2 NEAR, per-tx cap 0.05, daily cap 0.2, allowlist = paid-api only) | [`2eFPGKTDSh…BXuKS`](https://testnet.nearblocks.io/txns/2eFPGKTDShHJZomzRJmvbgZTWj5foxoWweAtW3tBXuKS) |
+| `/break` attack attempts: 3 of 5 tested styles fooled break-agent into attempting a payment (fake bug-bounty payout, a roleplay jailbreak, a fake refund threat); the Vault `Blocked` all 3 on the allowlist check — 0 NEAR stolen | e.g. [`5QfQ4t768A…uvPvz`](https://testnet.nearblocks.io/txns/5QfQ4t768AKD3xHX3oiDK739mazPTne7DQwo8SxuvPvz) |
+| Demo accounts (testnet) | `agent`, `worker-scraper`, `worker-summarizer`, `paid-api`, `demo-owner`, `break-agent` `.vivek-meridian.testnet`; all ids and creation txs in [`deployments/testnet.json`](deployments/testnet.json) |
 | Hosted demo | _TODO_ |
 | Demo video | _TODO_ |
 | Chain Signatures payment (Sepolia) tx | _TODO_ |
@@ -171,7 +191,7 @@ Because the Vault's `Receipt` doesn't record a transaction hash (only `Mandate`/
 - Agent and paid API (M5): `openai` 7.55 (OpenAI-compatible client, pointed at NEAR AI Cloud), `express` 5.3
 - Worker marketplace (M6): same `openai`/`express`/`near-api-js`, no new dependencies
 - Dashboard (M7): Next.js 16, React 19, Tailwind CSS 4, `near-api-js` (its own `dashboard/package.json`)
-- _TODO: remaining libraries as they are added._
+- Break Meridian challenge + plain-English mandates: `openai` (NEAR AI Cloud, added to `dashboard/package.json`), no new dependencies otherwise — "the line" animation is pure CSS keyframes, no animation library
 
 ## Roadmap
 
@@ -201,3 +221,8 @@ spider sensi
 - [ ] S1 Chain Signatures Sepolia payment via `authorize_foreign_payment`
 - [ ] S2 1Click quote in live flow + one real mainnet swap recorded
 - [x] S3 Delegation tree visualization
+
+### Extras (Nov 12)
+- [x] "Break Meridian" public challenge at `/break`: real NEAR AI tool-calling agent (check_budget + send_payment), isolated mandate + restricted key, scoreboard, Hall of attempts, rate limiting, kill switch — 5 attack styles tested on testnet, 3 fooled the LLM, Vault blocked all 3, 0 NEAR stolen
+- [x] "The line" animation (`TheLine.tsx`) on `/break` and the dashboard — pure CSS, blocked/paid/refused states, under 1.5s
+- [x] Plain-English mandates: "describe the rules in your own words" → NEAR AI parses to exact fields for review/edit, never auto-submitted, client-side sanity validation before create_mandate
