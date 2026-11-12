@@ -14,6 +14,7 @@
     "setup-agent-key": "tsx scripts/setup-agent-key.ts",
     "setup-worker-keys": "tsx scripts/setup-worker-keys.ts",
     "setup-break-agent": "tsx scripts/setup-break-agent.ts",
+    "reset-demo": "tsx scripts/reset-demo.ts",
     "prove-no-bypass": "tsx scripts/prove-key-restriction.ts",
     "paid-api": "tsx vendors/paid-api/src/index.ts",
     "worker-scraper": "tsx vendors/worker-scraper/src/index.ts",

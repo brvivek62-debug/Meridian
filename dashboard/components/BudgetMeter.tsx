@@ -32,7 +32,9 @@ export function BudgetMeter({ mandate }: { mandate: Mandate }) {
       </div>
       <div className="flex flex-wrap gap-1.5 pt-1">
         {mandate.allowlist.length === 0 ? (
-          <span className="rounded-full border border-offwhite/15 px-2.5 py-0.5 text-[11px] font-mono text-offwhite/50">any vendor allowed</span>
+          <span className="rounded-full border border-amber-500/50 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-mono uppercase tracking-wide text-amber-400">
+            no allowlist (unsafe)
+          </span>
         ) : (
           mandate.allowlist.map((a) => (
             <span key={a} className="rounded-full border border-offwhite/15 px-2.5 py-0.5 text-[11px] font-mono text-offwhite/70">

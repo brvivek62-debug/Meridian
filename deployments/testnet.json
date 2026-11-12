@@ -24,24 +24,23 @@
     "deployedAt": "2026-11-11T09:24:04.876Z"
   },
   "seed": {
-    "mandateId": 0,
+    "mandateId": 7,
     "agent": "agent.vivek-meridian.testnet",
     "budget": "5 NEAR",
-    "createMandateTx": "9DZkqxPYUj8VjX6jdBu5Sr3Njftn744nTRopyK4PbpY7",
-    "payment": {
-      "to": "paid-api.vivek-meridian.testnet",
-      "amount": "0.1 NEAR",
-      "receiptId": 0,
-      "tx": "CKLuXywEZAq6qL3zRBnZrYkDxguWADzPHTuPotMpfzqW"
+    "createMandateTx": "98Fnv6oQNAMW1qZzhB9ooMo2Ho2LuFkzANuBaW17ZjjZ",
+    "subMandate": {
+      "id": 8,
+      "agent": "worker-summarizer.vivek-meridian.testnet",
+      "budget": "1 NEAR"
     },
-    "seededAt": "2026-11-11T09:25:23.827Z"
+    "resetAt": "2026-11-12T09:57:45.338Z"
   },
   "break": {
     "accountId": "break-agent.vivek-meridian.testnet",
     "ownerId": "demo-owner.vivek-meridian.testnet",
-    "mandateId": 6,
+    "mandateId": 9,
     "budget": "2 NEAR",
-    "createMandateTx": "2eFPGKTDShHJZomzRJmvbgZTWj5foxoWweAtW3tBXuKS",
-    "createdAt": "2026-11-12T08:59:14.362Z"
+    "createMandateTx": "GHksAdyAQ2ChtX8ZjUyzSom41xVh5Lo2spj8qAnhyEBK",
+    "createdAt": "2026-11-12T09:57:45.339Z"
   }
 }

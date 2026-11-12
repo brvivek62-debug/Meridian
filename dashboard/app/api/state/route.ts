@@ -2,8 +2,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { DEMO_OWNER_ID, EXPLORER_BASE, OWNER_ID, VAULT_ID, view } from '@/lib/near';
-import type { Bid, DashboardState, Mandate, MandateWithChildren, OwnerGroup, PendingPayment, Task } from '@/lib/types';
+import { breakStore } from '@/lib/breakStore';
+import { AGENT_ID, DEMO_OWNER_ID, EXPLORER_BASE, OWNER_ID, VAULT_ID, view } from '@/lib/near';
+import type { Bid, DashboardState, DashboardStats, Mandate, MandateWithChildren, OwnerGroup, PendingPayment, Task } from '@/lib/types';
 
 const RECEIPT_PAGE = 50;
 const TASK_PAGE = 200;
@@ -42,17 +43,41 @@ async function loadGroup(ownerId: string, role: OwnerGroup['role'], canAct: bool
   return { ownerId, role, canAct, mandates: withChildren.sort((a, b) => a.id - b.id), pending };
 }
 
+function computeStats(owners: OwnerGroup[], breakBlocked: number, breakStolenYocto: string): DashboardStats {
+  let nearUnderMandateYocto = 0n;
+  let paymentsMade = 0;
+  let vaultBlocked = 0;
+  for (const owner of owners) {
+    for (const m of owner.mandates) {
+      if (m.active && m.parent === null) nearUnderMandateYocto += BigInt(m.budget);
+      for (const r of m.receipts) {
+        if (r.kind === 'Payment' || r.kind === 'EscrowRelease') paymentsMade += 1;
+        if (r.kind === 'Blocked') vaultBlocked += 1;
+      }
+    }
+  }
+  return {
+    nearUnderMandateYocto: nearUnderMandateYocto.toString(),
+    paymentsMade,
+    attacksBlocked: vaultBlocked + breakBlocked,
+    nearStolenYocto: breakStolenYocto,
+  };
+}
+
 export async function GET() {
   try {
     const allTasks = await loadAllTasks();
     const owners: OwnerGroup[] = [await loadGroup(OWNER_ID, 'production', false, allTasks)];
     if (DEMO_OWNER_ID) owners.push(await loadGroup(DEMO_OWNER_ID, 'demo', true, allTasks));
+    const breakScoreboard = await breakStore.scoreboard();
 
     const body: DashboardState = {
       network: 'testnet',
       vaultId: VAULT_ID,
       explorerBase: EXPLORER_BASE,
+      agentAccountId: AGENT_ID,
       owners,
+      stats: computeStats(owners, breakScoreboard.blockedAttempts, breakScoreboard.nearStolenYocto),
       generatedAt: new Date().toISOString(),
     };
     return NextResponse.json(body);

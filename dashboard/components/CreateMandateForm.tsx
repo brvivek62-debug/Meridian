@@ -14,10 +14,10 @@ interface ParsedMandate {
 }
 
 export function CreateMandateForm({
-  demoOwnerId,
+  defaultAgentId,
   onSubmit,
 }: {
-  demoOwnerId: string;
+  defaultAgentId: string;
   onSubmit: (body: {
     agent: string;
     budgetNear: string;
@@ -95,7 +95,7 @@ export function CreateMandateForm({
     setBusy(true);
     setResult(null);
     const r = await onSubmit({
-      agent: agent.trim() || demoOwnerId,
+      agent: agent.trim() || defaultAgentId,
       budgetNear,
       perTxCapNear,
       dailyCapNear,
@@ -128,7 +128,14 @@ export function CreateMandateForm({
             type="button"
             onClick={parse}
             disabled={parsing || !description.trim()}
-            className="rounded border border-accent/50 bg-accent/10 px-3 py-1 font-mono text-xs uppercase tracking-wide text-accent transition-colors duration-150 hover:bg-accent/20 disabled:opacity-40"
+            className={[
+              'rounded px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wide transition-all duration-150',
+              !description.trim()
+                ? 'cursor-not-allowed border border-offwhite/15 bg-offwhite/5 text-offwhite/30'
+                : parsing
+                  ? 'cursor-wait border border-accent bg-accent/80 text-white'
+                  : 'border border-accent bg-accent text-white hover:bg-[#1f7ae0] active:scale-[0.98] active:bg-[#1a6cc9]',
+            ].join(' ')}
           >
             {parsing ? 'Parsing…' : 'Parse with AI'}
           </button>
@@ -151,7 +158,7 @@ export function CreateMandateForm({
       )}
 
       <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
-        <Field label="Agent account" value={agent} onChange={setAgent} placeholder={demoOwnerId} />
+        <Field label="Agent account" value={agent} onChange={setAgent} placeholder={defaultAgentId} />
         <Field label="Budget (NEAR)" value={budgetNear} onChange={setBudgetNear} />
         <Field label="Per-tx cap (NEAR)" value={perTxCapNear} onChange={setPerTxCapNear} />
         <Field label="Daily cap (NEAR)" value={dailyCapNear} onChange={setDailyCapNear} />
@@ -170,7 +177,14 @@ export function CreateMandateForm({
             <button
               type="submit"
               disabled={busy || validationErrors.length > 0}
-              className="rounded border border-accent/50 bg-accent/10 px-4 py-1.5 font-mono text-sm text-accent transition-colors duration-150 hover:bg-accent/20 disabled:opacity-40"
+              className={[
+                'rounded px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-150',
+                validationErrors.length > 0
+                  ? 'cursor-not-allowed border border-offwhite/15 bg-offwhite/5 text-offwhite/30'
+                  : busy
+                    ? 'cursor-wait border border-accent bg-accent/80 text-white'
+                    : 'border border-accent bg-accent text-white shadow-[0_0_14px_2px_rgba(47,140,255,0.4)] hover:bg-[#1f7ae0] active:scale-[0.98] active:bg-[#1a6cc9]',
+              ].join(' ')}
             >
               {busy ? 'Creating…' : 'Create mandate'}
             </button>

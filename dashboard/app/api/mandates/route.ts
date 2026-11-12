@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, nearToYocto, signerFor, txHash, txValue } from '@/lib/near';
+import { AGENT_ID, DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, nearToYocto, signerFor, txHash, txValue } from '@/lib/near';
 
 interface CreateMandateBody {
   agent?: string;
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       contractId: VAULT_ID,
       methodName: 'create_mandate',
       args: {
-        agent: body.agent || DEMO_OWNER_ID,
+        agent: body.agent || AGENT_ID,
         per_tx_cap: nearToYocto(body.perTxCapNear).toString(),
         daily_cap: nearToYocto(body.dailyCapNear).toString(),
         allowlist: body.allowlist ?? [],

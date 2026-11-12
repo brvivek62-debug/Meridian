@@ -89,10 +89,19 @@ export interface OwnerGroup {
   pending: PendingPayment[];
 }
 
+export interface DashboardStats {
+  nearUnderMandateYocto: string;
+  paymentsMade: number;
+  attacksBlocked: number;
+  nearStolenYocto: string;
+}
+
 export interface DashboardState {
   network: string;
   vaultId: string;
   explorerBase: string;
+  agentAccountId: string;
   owners: OwnerGroup[];
+  stats: DashboardStats;
   generatedAt: string;
 }
