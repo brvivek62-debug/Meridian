@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/Button';
+import { TxLink } from '@/components/TxLink';
 
 type Result = { ok: boolean; error?: string; mandateId?: number; explorer?: string };
 
@@ -48,13 +50,13 @@ export function CreateMandateForm({
     const perTx = Number(perTxCapNear);
     const daily = Number(dailyCapNear);
     const threshold = Number(approvalThresholdNear);
-    if (!Number.isFinite(budget) || budget <= 0) errs.push('budget must be greater than 0');
-    if (!Number.isFinite(perTx) || perTx <= 0) errs.push('per-tx cap must be greater than 0');
-    else if (Number.isFinite(budget) && perTx > budget) errs.push('per-tx cap cannot exceed the budget');
-    if (!Number.isFinite(daily) || daily <= 0) errs.push('daily cap must be greater than 0');
-    else if (Number.isFinite(budget) && daily > budget) errs.push('daily cap cannot exceed the budget');
-    if (!Number.isFinite(threshold) || threshold < 0) errs.push('approval threshold cannot be negative');
-    else if (Number.isFinite(budget) && threshold > budget) errs.push('approval threshold cannot exceed the budget');
+    if (!Number.isFinite(budget) || budget <= 0) errs.push('Budget must be greater than 0');
+    if (!Number.isFinite(perTx) || perTx <= 0) errs.push('Per-tx cap must be greater than 0');
+    else if (Number.isFinite(budget) && perTx > budget) errs.push('Per-tx cap cannot exceed the budget');
+    if (!Number.isFinite(daily) || daily <= 0) errs.push('Daily cap must be greater than 0');
+    else if (Number.isFinite(budget) && daily > budget) errs.push('Daily cap cannot exceed the budget');
+    if (!Number.isFinite(threshold) || threshold < 0) errs.push('Approval threshold cannot be negative');
+    else if (Number.isFinite(budget) && threshold > budget) errs.push('Approval threshold cannot exceed the budget');
     return errs;
   }, [budgetNear, perTxCapNear, dailyCapNear, approvalThresholdNear]);
 
@@ -112,43 +114,31 @@ export function CreateMandateForm({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-offwhite/12 bg-navy-raised/30 p-3">
-        <label className="flex flex-col gap-1">
-          <span className="font-mono text-[11px] uppercase tracking-wide text-offwhite/50">Describe the rules in your own words</span>
+      <div className="rounded-xl border border-border bg-surface p-4">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-medium text-slate">Describe the rules in your own words</span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value.slice(0, 2000))}
             rows={3}
             placeholder='e.g. "Give the agent 3 NEAR total, up to 0.5 NEAR per payment, no more than 1 NEAR a day, only to my paid API and two workers, anything over 0.8 NEAR needs my OK."'
-            className="resize-none rounded border border-offwhite/15 bg-transparent px-2.5 py-1.5 font-mono text-sm text-offwhite outline-none transition-colors duration-150 placeholder:text-offwhite/30 focus:border-accent/60"
+            className="resize-none rounded-lg border border-border bg-white px-3 py-2 text-[14px] text-ink outline-none transition-colors duration-150 placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
         </label>
-        <div className="mt-2 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={parse}
-            disabled={parsing || !description.trim()}
-            className={[
-              'rounded px-3 py-1.5 font-mono text-xs font-bold uppercase tracking-wide transition-all duration-150',
-              !description.trim()
-                ? 'cursor-not-allowed border border-offwhite/15 bg-offwhite/5 text-offwhite/30'
-                : parsing
-                  ? 'cursor-wait border border-accent bg-accent/80 text-white'
-                  : 'border border-accent bg-accent text-white hover:bg-[#1f7ae0] active:scale-[0.98] active:bg-[#1a6cc9]',
-            ].join(' ')}
-          >
+        <div className="mt-3 flex items-center gap-3">
+          <Button type="button" onClick={parse} disabled={!description.trim()} loading={parsing} className="h-9">
             {parsing ? 'Parsing…' : 'Parse with AI'}
-          </button>
-          {parseError && <span className="font-mono text-xs text-danger">{parseError}</span>}
+          </Button>
+          {parseError && <span className="text-[13px] text-danger">{parseError}</span>}
         </div>
       </div>
 
       {reviewing && (
-        <div className="rounded-md border border-accent/30 bg-accent/5 p-3 font-mono text-xs text-accent">
-          Parsed from your description — review every field below, edit anything that isn&rsquo;t right, then confirm
-          with &ldquo;Create mandate&rdquo;. Nothing is submitted until you do.
+        <div className="rounded-xl border border-border bg-accent/5 p-4 text-[13px] text-slate">
+          <span className="text-ink">Parsed from your description</span> — review every field below, edit anything
+          that isn&rsquo;t right, then confirm with &ldquo;Create mandate&rdquo;. Nothing is submitted until you do.
           {parseNotes.length > 0 && (
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-offwhite/60">
+            <ul className="mt-2 list-disc space-y-0.5 pl-4">
               {parseNotes.map((n, i) => (
                 <li key={i}>{n}</li>
               ))}
@@ -157,7 +147,7 @@ export function CreateMandateForm({
         </div>
       )}
 
-      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+      <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
         <Field label="Agent account" value={agent} onChange={setAgent} placeholder={defaultAgentId} />
         <Field label="Budget (NEAR)" value={budgetNear} onChange={setBudgetNear} />
         <Field label="Per-tx cap (NEAR)" value={perTxCapNear} onChange={setPerTxCapNear} />
@@ -165,39 +155,25 @@ export function CreateMandateForm({
         <Field label="Approval threshold (NEAR)" value={approvalThresholdNear} onChange={setApprovalThresholdNear} />
         <Field label="Allowlist (comma-separated, blank = any)" value={allowlist} onChange={setAllowlist} placeholder="paid-api.testnet, ..." />
 
-        <div className="sm:col-span-2 flex flex-col gap-2">
+        <div className="flex flex-col gap-3 sm:col-span-2">
           {validationErrors.length > 0 && (
-            <ul className="list-disc space-y-0.5 pl-4 font-mono text-xs text-danger">
+            <ul className="list-disc space-y-0.5 pl-4 text-[13px] text-danger">
               {validationErrors.map((err) => (
                 <li key={err}>{err}</li>
               ))}
             </ul>
           )}
           <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={busy || validationErrors.length > 0}
-              className={[
-                'rounded px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide transition-all duration-150',
-                validationErrors.length > 0
-                  ? 'cursor-not-allowed border border-offwhite/15 bg-offwhite/5 text-offwhite/30'
-                  : busy
-                    ? 'cursor-wait border border-accent bg-accent/80 text-white'
-                    : 'border border-accent bg-accent text-white shadow-[0_0_14px_2px_rgba(47,140,255,0.4)] hover:bg-[#1f7ae0] active:scale-[0.98] active:bg-[#1a6cc9]',
-              ].join(' ')}
-            >
+            <Button type="submit" disabled={validationErrors.length > 0} loading={busy}>
               {busy ? 'Creating…' : 'Create mandate'}
-            </button>
+            </Button>
             {result &&
               (result.ok ? (
-                <span className="font-mono text-xs text-accent">
-                  mandate {result.mandateId} created &middot;{' '}
-                  <a href={result.explorer} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
-                    view tx
-                  </a>
+                <span className="flex items-center gap-2 text-[13px] text-success">
+                  Mandate {result.mandateId} created · {result.explorer && <TxLink explorer={result.explorer} />}
                 </span>
               ) : (
-                <span className="font-mono text-xs text-danger">{result.error}</span>
+                <span className="text-[13px] text-danger">{result.error}</span>
               ))}
           </div>
         </div>
@@ -218,13 +194,13 @@ function Field({
   placeholder?: string;
 }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="font-mono text-[11px] uppercase tracking-wide text-offwhite/50">{label}</span>
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[13px] font-medium text-slate">{label}</span>
       <input
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-offwhite/15 bg-transparent px-2.5 py-1.5 font-mono text-sm text-offwhite outline-none transition-colors duration-150 focus:border-accent/60"
+        className="rounded-lg border border-border bg-white px-3 py-2 text-[14px] text-ink outline-none transition-colors duration-150 placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
       />
     </label>
   );

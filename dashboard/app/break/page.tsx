@@ -1,8 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { DemoModeBadge } from '@/components/Badge';
 import { AttackConsole, type SubmitResult } from '@/components/break/AttackConsole';
 import { HallOfAttempts } from '@/components/break/HallOfAttempts';
 import { Scoreboard } from '@/components/break/Scoreboard';
@@ -71,47 +69,40 @@ export default function BreakPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 pb-16 sm:px-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link href="/" className="font-mono text-xs text-offwhite/40 hover:text-accent">
-            &larr; Meridian dashboard
-          </Link>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight">Break Meridian</h1>
-          <p className="max-w-xl text-sm text-offwhite/50">
-            This AI agent controls a real wallet on NEAR testnet. Try to make it send you money &mdash; it genuinely
-            decides for itself. The Vault enforces the rest, on-chain.
-          </p>
-        </div>
-        <DemoModeBadge />
-      </header>
+    <main className="mx-auto max-w-[1120px] px-4 py-10 pb-20 sm:px-6">
+      <section className="mb-10 rounded-2xl border border-border bg-surface px-6 py-10 text-center sm:px-10">
+        <h1 className="text-[32px] font-semibold leading-tight text-ink">Try to make this AI agent send you money</h1>
+        <p className="mx-auto mt-3 max-w-xl text-[15px] text-slate">
+          This agent controls a real testnet wallet. It genuinely decides for itself — the Vault enforces the rest,
+          on-chain.
+        </p>
+      </section>
 
       {error && (
-        <div className="mb-6 rounded-md border border-danger/40 bg-danger/5 px-4 py-3 font-mono text-sm text-danger">{error}</div>
+        <div className="mb-6 rounded-lg border border-danger/30 bg-danger-bg px-4 py-3 text-[14px] text-danger">{error}</div>
       )}
 
-      <div className="mb-6">
-        <Scoreboard data={state?.scoreboard ?? null} />
+      <div className="mb-10">
+        <SectionHeading>Attack the agent</SectionHeading>
+        <AttackConsole enabled={state?.enabled ?? true} onSubmit={handleSubmit} explorerBase={state?.explorerBase ?? 'https://testnet.nearblocks.io'} />
       </div>
 
-      <div className="mb-6">
+      <div className="mb-10">
         <TheLine job={lineJob} />
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <section>
-          <SectionHeading>Attack the agent</SectionHeading>
-          <AttackConsole enabled={state?.enabled ?? true} onSubmit={handleSubmit} explorerBase={state?.explorerBase ?? 'https://testnet.nearblocks.io'} />
-        </section>
-
-        <section>
-          <SectionHeading>Hall of attempts</SectionHeading>
-          <HallOfAttempts attempts={state?.recent ?? []} />
-        </section>
+      <div className="mb-10">
+        <SectionHeading>Scoreboard</SectionHeading>
+        <Scoreboard data={state?.scoreboard ?? null} />
       </div>
 
-      <footer className="mb-6 mt-10 border-t border-offwhite/10 pt-4 font-mono text-[11px] leading-relaxed text-offwhite/30">
-        break-agent holds its own small, isolated mandate &mdash; a budget, per-transaction cap, daily cap, and an
+      <div>
+        <SectionHeading>Recent attempts</SectionHeading>
+        <HallOfAttempts attempts={state?.recent ?? []} />
+      </div>
+
+      <footer className="mb-6 mt-14 border-t border-border pt-5 text-[12px] leading-relaxed text-muted">
+        break-agent holds its own small, isolated mandate — a budget, per-transaction cap, daily cap, and an
         allowlist containing only the demo paid-api vendor. No visitor-supplied account can ever be on it, so every
         payment the agent decides to attempt there is blocked on-chain. Hard mode shows the other side of the same
         coin: even a payment to that allowed vendor is still capped per-transaction and per-day.

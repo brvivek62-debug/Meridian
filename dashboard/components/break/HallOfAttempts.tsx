@@ -1,4 +1,5 @@
 import { RuleTag, TxLink } from '@/components/TxLink';
+import { Pill } from '@/components/ui/Pill';
 import type { PublicAttempt } from '@/lib/breakStore';
 
 /** Truncate at a whitespace boundary — never mid-word. */
@@ -19,46 +20,42 @@ function timeAgo(ts: number): string {
 
 export function HallOfAttempts({ attempts }: { attempts: PublicAttempt[] }) {
   if (attempts.length === 0) {
-    return <p className="font-mono text-sm text-offwhite/40">No attempts yet &mdash; be the first.</p>;
+    return <p className="text-[14px] text-muted">No attempts yet — be the first.</p>;
   }
   return (
-    <ul className="space-y-1.5">
-      {attempts.map((a) => (
-        <li
-          key={a.id}
-          className={[
-            'enter-fade flex flex-col gap-1.5 rounded-md border px-3 py-2',
-            a.fooled ? 'border-danger/30' : 'border-offwhite/10',
-          ].join(' ')}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-mono text-xs text-offwhite/70">&ldquo;{truncate(a.message, 110)}&rdquo;</span>
-            <span className="font-mono text-[11px] text-offwhite/40">{timeAgo(a.ts)}</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-            <span className={a.fooled ? 'text-danger' : 'text-offwhite/50'}>{a.fooled ? 'fooled' : 'refused'}</span>
-            {a.fooled && (
-              <>
-                <span className="text-offwhite/30">&rarr;</span>
-                <span className={a.vaultStatus === 'Blocked' ? 'text-danger' : 'text-accent'}>{a.vaultStatus}</span>
-                {a.reason && <span className="text-offwhite/40">({truncate(a.reason, 60)})</span>}
-              </>
-            )}
-          </div>
-          {a.blockedRules?.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {a.blockedRules.map((r) => (
-                <RuleTag key={r} rule={r} />
-              ))}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] text-offwhite/30">
-            <span>target: {a.target}</span>
-            {a.paidTo && a.paidTo !== a.target && <span>paid to: {a.paidTo}</span>}
-          </div>
-          {a.explorer && <TxLink explorer={a.explorer} />}
-        </li>
-      ))}
-    </ul>
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full min-w-[600px] border-collapse text-left text-[14px]">
+        <thead>
+          <tr className="border-b border-border bg-surface text-[13px] text-muted">
+            <th className="px-3 py-2 font-medium">Attempt</th>
+            <th className="px-3 py-2 font-medium">Result</th>
+            <th className="px-3 py-2 font-medium">Rule</th>
+            <th className="px-3 py-2 font-medium">Time</th>
+            <th className="px-3 py-2 font-medium"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {attempts.map((a) => (
+            <tr key={a.id} className="enter-fade border-b border-border last:border-b-0">
+              <td className="max-w-[220px] px-3 py-2.5 text-[13px] text-slate">&ldquo;{truncate(a.message, 90)}&rdquo;</td>
+              <td className="px-3 py-2.5">
+                {a.fooled ? (
+                  <Pill tone={a.vaultStatus === 'Blocked' ? 'danger' : 'success'}>{a.vaultStatus}</Pill>
+                ) : (
+                  <Pill tone="neutral">Refused</Pill>
+                )}
+              </td>
+              <td className="px-3 py-2.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {a.blockedRules?.map((r) => <RuleTag key={r} rule={r} />)}
+                </div>
+              </td>
+              <td className="px-3 py-2.5 text-[13px] text-muted">{timeAgo(a.ts)}</td>
+              <td className="px-3 py-2.5">{a.explorer && <TxLink explorer={a.explorer} />}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

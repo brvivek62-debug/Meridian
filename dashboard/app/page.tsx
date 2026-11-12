@@ -1,11 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { DemoModeBadge, RoleBadge } from '@/components/Badge';
+import { RoleBadge } from '@/components/Badge';
 import { ApprovalsInbox } from '@/components/ApprovalsInbox';
 import { CreateMandateForm } from '@/components/CreateMandateForm';
 import { DelegationTree } from '@/components/DelegationTree';
+import { LinkButton } from '@/components/ui/Button';
 import { MandateCard } from '@/components/MandateCard';
 import { SectionHeading } from '@/components/SectionHeading';
 import { Stat } from '@/components/Stat';
@@ -88,60 +88,51 @@ export default function Page() {
   const demoGroup = state?.owners.find((o) => o.role === 'demo');
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 pb-16 sm:px-6">
-      <header className="mb-8 rounded-xl border border-offwhite/12 bg-navy-raised/30 p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Meridian</h1>
-            <p className="mt-1 max-w-xl text-sm text-offwhite/60">
-              The line your agents can&rsquo;t cross &mdash; delegated, policy-checked spending for AI agents on NEAR.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <DemoModeBadge />
-            <Link
-              href="/break"
-              className="rounded-md border border-accent bg-accent px-4 py-2 font-mono text-sm font-bold uppercase tracking-wide text-white shadow-[0_0_18px_2px_rgba(47,140,255,0.45)] transition-all duration-150 hover:bg-[#1f7ae0] hover:shadow-[0_0_24px_4px_rgba(47,140,255,0.55)] active:scale-[0.98]"
-            >
-              Try to break it &rarr;
-            </Link>
-          </div>
+    <main className="mx-auto max-w-[1120px] px-4 py-10 pb-20 sm:px-6">
+      <section className="mb-10 rounded-2xl border border-border bg-surface px-6 py-10 text-center sm:px-10">
+        <h1 className="text-[32px] font-semibold leading-tight text-ink">The line your agents can&rsquo;t cross</h1>
+        <p className="mx-auto mt-3 max-w-xl text-[15px] text-slate">
+          Delegated, policy-checked spending for AI agents on NEAR — budgets, caps, allowlists and approvals, enforced
+          on-chain by the Vault.
+        </p>
+        <div className="mt-6">
+          <LinkButton href="/break">Try to break it</LinkButton>
         </div>
+      </section>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="NEAR under mandate" value={state ? formatNear(state.stats.nearUnderMandateYocto, 2) : '—'} />
-          <Stat label="Payments made" value={state ? String(state.stats.paymentsMade) : '—'} />
-          <Stat label="Attacks blocked" value={state ? String(state.stats.attacksBlocked) : '—'} />
-          <Stat
-            label="NEAR stolen"
-            value={state ? formatNear(state.stats.nearStolenYocto, 5) : '—'}
-            danger={state ? BigInt(state.stats.nearStolenYocto) !== 0n : false}
-          />
-        </div>
-      </header>
+      <div className="mb-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="NEAR under mandate" value={state ? formatNear(state.stats.nearUnderMandateYocto, 2) : '—'} />
+        <Stat label="Payments made" value={state ? String(state.stats.paymentsMade) : '—'} />
+        <Stat label="Attacks blocked" value={state ? String(state.stats.attacksBlocked) : '—'} />
+        <Stat
+          label="NEAR stolen"
+          value={state ? formatNear(state.stats.nearStolenYocto, 5) : '—'}
+          danger={state ? BigInt(state.stats.nearStolenYocto) !== 0n : false}
+        />
+      </div>
 
       {error && (
-        <div className="mb-6 rounded-md border border-danger/40 bg-danger/5 px-4 py-3 font-mono text-sm text-danger">
-          {error} &mdash; is the Vault reachable and is <code>VAULT_CONTRACT_ID</code> set in <code>.env</code>?
+        <div className="mb-6 rounded-lg border border-danger/30 bg-danger-bg px-4 py-3 text-[14px] text-danger">
+          {error} — is the Vault reachable and is <code>VAULT_CONTRACT_ID</code> set in <code>.env</code>?
         </div>
       )}
 
-      {!state && !error && <p className="font-mono text-sm text-offwhite/50">Loading live state from {`vault.*.testnet`}&hellip;</p>}
+      {!state && !error && <p className="text-[14px] text-muted">Loading live state from {`vault.*.testnet`}&hellip;</p>}
 
-      <div className="mb-8">
+      <div className="mb-10">
         <TheLine job={lineJob} />
       </div>
 
       {state && (
-        <div className="space-y-10">
-          <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-xs text-offwhite/40">
-            <a href={`${state.explorerBase}/address/${state.vaultId}`} target="_blank" rel="noreferrer" className="hover:text-accent hover:underline">
+        <div className="space-y-12">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] text-muted">
+            <a href={`${state.explorerBase}/address/${state.vaultId}`} target="_blank" rel="noreferrer" className="font-mono hover:text-accent hover:underline">
               {state.vaultId}
             </a>
             <div className="flex items-center gap-3">
-              <span>updated {new Date(state.generatedAt).toLocaleTimeString()}</span>
-              <button onClick={() => setShowHistory((h) => !h)} className="rounded border border-offwhite/15 px-2 py-0.5 uppercase tracking-wide text-offwhite/50 hover:text-accent">
-                {showHistory ? 'hide history' : 'show history'}
+              <span>Updated {new Date(state.generatedAt).toLocaleTimeString()}</span>
+              <button onClick={() => setShowHistory((h) => !h)} className="rounded-md border border-border px-2.5 py-1 text-slate hover:border-muted hover:text-ink">
+                {showHistory ? 'Hide history' : 'Show history'}
               </button>
             </div>
           </div>
@@ -153,12 +144,12 @@ export default function Page() {
               <section key={owner.ownerId}>
                 <div className="mb-3 flex items-center gap-2">
                   <RoleBadge role={owner.role} />
-                  <span className="font-mono text-sm text-offwhite/60">{owner.ownerId}</span>
+                  <span className="font-mono text-[13px] text-slate">{owner.ownerId}</span>
                 </div>
                 {roots.length === 0 ? (
-                  <p className="font-mono text-sm text-offwhite/40">No active mandates.</p>
+                  <p className="text-[14px] text-muted">No active mandates.</p>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-4">
                     {roots.map((m) => (
                       <MandateCard key={m.id} mandate={m} allMandates={mandates} explorerBase={state.explorerBase} />
                     ))}
@@ -189,15 +180,15 @@ export default function Page() {
             {demoGroup ? (
               <CreateMandateForm defaultAgentId={state.agentAccountId} onSubmit={handleCreateMandate} />
             ) : (
-              <p className="font-mono text-sm text-offwhite/40">
-                No demo-owner account configured &mdash; run <code>npm run setup-dashboard</code>.
+              <p className="text-[14px] text-muted">
+                No demo-owner account configured — run <code>npm run setup-dashboard</code>.
               </p>
             )}
           </section>
         </div>
       )}
 
-      <footer className="mb-6 mt-12 border-t border-offwhite/10 pt-4 font-mono text-[11px] leading-relaxed text-offwhite/30">
+      <footer className="mb-6 mt-14 border-t border-border pt-5 text-[12px] leading-relaxed text-muted">
         Reads the Vault&rsquo;s view methods over testnet RPC every {POLL_MS / 1000}s. Owner actions are signed server-side by{' '}
         {demoGroup ? shortAccount(demoGroup.ownerId) : 'a demo-owner account'}, never the real owner&rsquo;s keychain key.
       </footer>

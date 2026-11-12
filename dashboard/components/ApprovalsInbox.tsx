@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { formatNear, shortAccount } from '@/lib/format';
 import type { OwnerGroup } from '@/lib/types';
+import { Button } from '@/components/ui/Button';
+import { TxLink } from '@/components/TxLink';
 
 type ActResult = { ok: boolean; error?: string; explorer?: string; status?: string };
 
@@ -19,7 +21,7 @@ export function ApprovalsInbox({
   const rows = owners.flatMap((o) => o.pending.map((p) => ({ ...p, canAct: o.canAct })));
 
   if (rows.length === 0) {
-    return <p className="font-mono text-sm text-offwhite/40">Nothing waiting on approval.</p>;
+    return <p className="text-[14px] text-muted">Nothing waiting on approval.</p>;
   }
 
   async function act(pendingId: number, action: 'approve' | 'reject') {
@@ -34,46 +36,35 @@ export function ApprovalsInbox({
       {rows.map((p) => {
         const result = results[p.id];
         return (
-          <li key={p.id} className="enter-fade rounded-md border border-offwhite/10 px-3 py-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="font-mono text-sm">
-                {formatNear(p.amount)} &rarr; {shortAccount(p.to)}
+          <li key={p.id} className="enter-fade rounded-lg border border-border px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-[14px] text-ink">
+                <span className="tabular-nums">{formatNear(p.amount)}</span> &rarr; {shortAccount(p.to)}
               </div>
               {p.canAct ? (
                 <div className="flex gap-2">
-                  <button
-                    disabled={busy === p.id}
-                    onClick={() => act(p.id, 'approve')}
-                    className="rounded border border-accent/40 px-2.5 py-1 font-mono text-xs text-accent transition-colors duration-150 hover:bg-accent/10 disabled:opacity-40"
-                  >
+                  <Button variant="primary" className="h-8 px-3 text-[13px]" disabled={busy === p.id} onClick={() => act(p.id, 'approve')}>
                     Approve
-                  </button>
-                  <button
-                    disabled={busy === p.id}
-                    onClick={() => act(p.id, 'reject')}
-                    className="rounded border border-offwhite/20 px-2.5 py-1 font-mono text-xs text-offwhite/70 transition-colors duration-150 hover:bg-offwhite/10 disabled:opacity-40"
-                  >
+                  </Button>
+                  <Button variant="secondary" className="h-8 px-3 text-[13px]" disabled={busy === p.id} onClick={() => act(p.id, 'reject')}>
                     Reject
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <span className="font-mono text-[11px] text-offwhite/40">read-only &mdash; needs the real owner&rsquo;s keychain key</span>
+                <span className="text-[13px] text-muted">Read-only — needs the real owner&rsquo;s keychain key</span>
               )}
             </div>
-            <div className="mt-1 font-mono text-xs text-offwhite/40">
-              pending #{p.id} &middot; mandate {p.mandate_id} {p.memo && `— ${p.memo}`}
+            <div className="mt-1.5 text-[13px] text-muted">
+              Pending #{p.id} · Mandate {p.mandate_id} {p.memo && `— ${p.memo}`}
             </div>
             {result && (
-              <div className={['mt-1.5 font-mono text-xs', result.ok ? 'text-accent' : 'text-danger'].join(' ')}>
+              <div className="mt-2 text-[13px]">
                 {result.ok ? (
-                  <>
-                    {result.status} &middot;{' '}
-                    <a href={result.explorer} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
-                      view tx
-                    </a>
-                  </>
+                  <span className="flex items-center gap-2 text-success">
+                    {result.status} · {result.explorer && <TxLink explorer={result.explorer} />}
+                  </span>
                 ) : (
-                  result.error
+                  <span className="text-danger">{result.error}</span>
                 )}
               </div>
             )}
