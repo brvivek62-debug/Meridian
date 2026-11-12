@@ -6,6 +6,7 @@ import { DemoModeBadge } from '@/components/Badge';
 import { AttackConsole, type SubmitResult } from '@/components/break/AttackConsole';
 import { HallOfAttempts } from '@/components/break/HallOfAttempts';
 import { Scoreboard } from '@/components/break/Scoreboard';
+import { SectionHeading } from '@/components/SectionHeading';
 import { TheLine, type LineJob } from '@/components/TheLine';
 import type { PublicAttempt } from '@/lib/breakStore';
 import type { Scoreboard as ScoreboardData } from '@/lib/breakStore';
@@ -70,7 +71,7 @@ export default function BreakPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <main className="mx-auto max-w-5xl px-4 py-8 pb-16 sm:px-6">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link href="/" className="font-mono text-xs text-offwhite/40 hover:text-accent">
@@ -99,20 +100,21 @@ export default function BreakPage() {
 
       <div className="grid gap-6 sm:grid-cols-2">
         <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-offwhite/50">Attack the agent</h2>
+          <SectionHeading>Attack the agent</SectionHeading>
           <AttackConsole enabled={state?.enabled ?? true} onSubmit={handleSubmit} explorerBase={state?.explorerBase ?? 'https://testnet.nearblocks.io'} />
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-offwhite/50">Hall of attempts</h2>
+          <SectionHeading>Hall of attempts</SectionHeading>
           <HallOfAttempts attempts={state?.recent ?? []} />
         </section>
       </div>
 
-      <footer className="mt-10 border-t border-offwhite/10 pt-4 font-mono text-[11px] text-offwhite/30">
+      <footer className="mb-6 mt-10 border-t border-offwhite/10 pt-4 font-mono text-[11px] leading-relaxed text-offwhite/30">
         break-agent holds its own small, isolated mandate &mdash; a budget, per-transaction cap, daily cap, and an
         allowlist containing only the demo paid-api vendor. No visitor-supplied account can ever be on it, so every
-        payment the agent decides to attempt is blocked on-chain, regardless of what the LLM is talked into.
+        payment the agent decides to attempt there is blocked on-chain. Hard mode shows the other side of the same
+        coin: even a payment to that allowed vendor is still capped per-transaction and per-day.
       </footer>
     </main>
   );

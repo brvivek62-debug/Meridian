@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { createHash, randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { classifyBlockReasons } from '@/lib/blockRules';
 import { runBreakAgent } from '@/lib/breakAgent';
 import { breakStore, toPublic, type Attempt } from '@/lib/breakStore';
 import { EXPLORER_BASE, VAULT_ID } from '@/lib/near';
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
 
     const result = await runBreakAgent(message, target);
 
+    const vaultStatus = result.vault?.status ?? (result.fooled ? 'error' : 'refused');
     const attempt: Attempt = {
       id: randomUUID(),
       ts: now,
@@ -71,9 +73,11 @@ export async function POST(req: NextRequest) {
       message: message.slice(0, MAX_MESSAGE_LEN),
       target,
       fooled: result.fooled,
-      decision: result.agentReply.slice(0, 400),
-      vaultStatus: result.vault?.status ?? (result.fooled ? 'error' : 'refused'),
+      paidTo: result.paymentAttempt?.to ?? null,
+      decision: result.agentReply,
+      vaultStatus,
       reason: result.vault?.reason ?? result.error ?? null,
+      blockedRules: vaultStatus === 'Blocked' ? classifyBlockReasons(result.vault?.reason) : [],
       amountNear: result.paymentAttempt?.amountNear ?? null,
       tx: result.vault?.hash ?? null,
       explorer: result.vault?.explorer ?? null,

@@ -18,9 +18,13 @@ export interface Attempt {
   message: string;
   target: string;
   fooled: boolean;
+  /** Account the agent actually tried to pay (may differ from `target`, e.g. a "hard mode" overspend at the allowlisted vendor). */
+  paidTo: string | null;
   decision: string;
   vaultStatus: string;
   reason: string | null;
+  /** Which on-chain rule(s) blocked this attempt, e.g. ["ALLOWLIST"] or ["PER-TX CAP", "DAILY CAP"]. */
+  blockedRules: string[];
   amountNear: string | null;
   tx: string | null;
   explorer: string | null;
@@ -37,7 +41,9 @@ export function toPublic(a: Attempt): PublicAttempt {
 export interface Scoreboard {
   totalAttempts: number;
   agentsFooled: number;
+  blockedAttempts: number;
   nearStolenYocto: string;
+  blocksByRule: Record<string, number>;
 }
 
 export interface BreakStore {
@@ -81,11 +87,23 @@ class JsonFileStore implements BreakStore {
   async scoreboard(): Promise<Scoreboard> {
     const all = this.readAll();
     const agentsFooled = all.filter((a) => a.fooled).length;
+    // The only legitimate recipient break-agent's mandate allows. A "hard mode" overspend
+    // attempt can still end up `Paid` here (capped to the per-tx limit) — that is money
+    // reaching the real vendor, not an attacker, so it must never count as "stolen". Read
+    // lazily (not at module scope) so it doesn't race dashboard/lib/near.ts's env loading.
+    const legitVendorId = process.env.PAID_API_ACCOUNT_ID;
     const nearStolenYocto = all
-      .filter((a) => a.vaultStatus === 'Paid' && a.amountNear)
+      .filter((a) => a.vaultStatus === 'Paid' && a.amountNear && a.paidTo !== legitVendorId)
       .reduce((sum, a) => sum + nearToYoctoSafe(a.amountNear as string), 0n)
       .toString();
-    return { totalAttempts: all.length, agentsFooled, nearStolenYocto };
+    const blocksByRule: Record<string, number> = {};
+    for (const a of all) {
+      for (const rule of a.blockedRules ?? []) {
+        blocksByRule[rule] = (blocksByRule[rule] ?? 0) + 1;
+      }
+    }
+    const blockedAttempts = all.filter((a) => a.vaultStatus === 'Blocked').length;
+    return { totalAttempts: all.length, agentsFooled, blockedAttempts, nearStolenYocto, blocksByRule };
   }
 
   async countSince(ipHash: string, sinceMs: number): Promise<number> {

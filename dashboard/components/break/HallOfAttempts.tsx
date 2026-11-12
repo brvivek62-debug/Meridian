@@ -1,8 +1,12 @@
-import { shortAccount } from '@/lib/format';
+import { RuleTag, TxLink } from '@/components/TxLink';
 import type { PublicAttempt } from '@/lib/breakStore';
 
+/** Truncate at a whitespace boundary — never mid-word. */
 function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
+  if (s.length <= n) return s;
+  const cut = s.slice(0, n);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 function timeAgo(ts: number): string {
@@ -23,7 +27,7 @@ export function HallOfAttempts({ attempts }: { attempts: PublicAttempt[] }) {
         <li
           key={a.id}
           className={[
-            'enter-fade flex flex-col gap-1 rounded-md border px-3 py-2',
+            'enter-fade flex flex-col gap-1.5 rounded-md border px-3 py-2',
             a.fooled ? 'border-danger/30' : 'border-offwhite/10',
           ].join(' ')}
         >
@@ -38,15 +42,21 @@ export function HallOfAttempts({ attempts }: { attempts: PublicAttempt[] }) {
                 <span className="text-offwhite/30">&rarr;</span>
                 <span className={a.vaultStatus === 'Blocked' ? 'text-danger' : 'text-accent'}>{a.vaultStatus}</span>
                 {a.reason && <span className="text-offwhite/40">({truncate(a.reason, 60)})</span>}
-                {a.explorer && (
-                  <a href={a.explorer} target="_blank" rel="noreferrer" className="text-offwhite/40 underline-offset-2 hover:text-accent hover:underline">
-                    tx
-                  </a>
-                )}
               </>
             )}
-            <span className="text-offwhite/30">target: {shortAccount(a.target)}</span>
           </div>
+          {a.blockedRules?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {a.blockedRules.map((r) => (
+                <RuleTag key={r} rule={r} />
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] text-offwhite/30">
+            <span>target: {a.target}</span>
+            {a.paidTo && a.paidTo !== a.target && <span>paid to: {a.paidTo}</span>}
+          </div>
+          {a.explorer && <TxLink explorer={a.explorer} />}
         </li>
       ))}
     </ul>
