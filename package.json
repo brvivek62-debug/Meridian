@@ -11,10 +11,15 @@
     "deploy": "tsx scripts/deploy.ts",
     "seed": "tsx scripts/seed.ts",
     "setup-agent-key": "tsx scripts/setup-agent-key.ts",
+    "setup-worker-keys": "tsx scripts/setup-worker-keys.ts",
     "prove-no-bypass": "tsx scripts/prove-key-restriction.ts",
     "paid-api": "tsx vendors/paid-api/src/index.ts",
+    "worker-scraper": "tsx vendors/worker-scraper/src/index.ts",
+    "worker-summarizer": "tsx vendors/worker-summarizer/src/index.ts",
     "agent": "tsx agent/src/index.ts",
+    "agent:m6": "tsx agent/src/index.ts --m6",
     "demo:m5": "tsx scripts/demo-m5.ts",
+    "demo:m6": "tsx scripts/demo-m6.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

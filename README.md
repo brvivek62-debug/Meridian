@@ -37,6 +37,7 @@ scripts/           Deploy, seed, demo-run scripts
 - A sub-mandate can never have more authority than its parent: every limit must be ≤ the parent's, its allowlist must be a subset, and its budget comes out of the parent's remaining budget.
 - The owner can `revoke` a mandate at any time. It deactivates the whole subtree and refunds the unspent budget.
 - **Agent key restriction.** `agent.vivek-meridian.testnet` holds only a function-call access key (`scripts/setup-agent-key.ts`, M5) scoped to `vault.vivek-meridian.testnet` and the Vault's agent-side methods only (`pay`, `post_task`, `accept_bid`, `release`, `refund`, `create_sub_mandate`). Its full-access key was removed in the same transaction. This is enforced by NEAR's own access-key validation, not by Vault contract code — a plain transfer or a call to any other method is rejected before it ever reaches a contract, as proven by `npm run prove-no-bypass` (`scripts/prove-key-restriction.ts`).
+- **Worker key restriction (M6).** The same pattern (`scripts/lib/keys.ts`, shared by `setup-agent-key.ts` and `setup-worker-keys.ts`) restricts `worker-scraper.vivek-meridian.testnet` to `submit_bid` only, and `worker-summarizer.vivek-meridian.testnet` to `submit_bid` + `pay` — the latter because once it is granted a sub-mandate, it also spends through the Vault on its own. Neither worker account can ever hold or move funds outside a Vault-checked call.
 
 ### Not enforced on-chain (yet)
 - **Contract upgrades.** `vault.vivek-meridian.testnet` keeps a full-access key held by the deployer, so the deployer can replace the code. The on-chain code hash is listed under [Deployments and proofs](#deployments-and-proofs) for anyone to check. A production Vault would remove that key or hand upgrades to a DAO.
@@ -99,6 +100,24 @@ npm run demo:m5             # starts vendors/paid-api, runs the agent, shows 402
 
 To run the two halves by hand instead of `demo:m5`: `npm run paid-api` in one terminal, then `npm run agent -- "your research question"` in another.
 
+### The agent marketplace: workers, bidding, sub-mandates (M6)
+
+```bash
+npm run setup-worker-keys   # worker-scraper, worker-summarizer: full-access key → function-call key scoped to the Vault, one-shot
+npm run demo:m6             # starts paid-api + both workers, runs the agent in marketplace mode, prints a colored recap
+```
+
+`setup-worker-keys` is idempotent, same pattern as `setup-agent-key` (shared logic in `scripts/lib/keys.ts`). `worker-scraper.<owner>.testnet` gets a key restricted to `submit_bid` only — it only ever acts as a bidder. `worker-summarizer.<owner>.testnet` gets `submit_bid` + `pay`, because once it is granted a sub-mandate it also spends through the Vault on its own.
+
+`vendors/worker-scraper` and `vendors/worker-summarizer` (`vendors/worker-common/service.ts` holds the shared scaffolding) each run a small Express service that:
+- polls `Vault.get_tasks` for open tasks posted by the agent and calls `submit_bid` with a starting price;
+- answers **one** counter-offer over HTTP (`POST /counter-offer { taskId, priceNear }`) — it accepts (and resubmits its bid on-chain at the new price) if the offer is at or above its own minimum price, otherwise it rejects and its current bid stands; a second call for the same task just replays its first decision;
+- delivers the work once it has won a task (`GET /deliver/:taskId`) — `worker-scraper` returns mock scraped data, `worker-summarizer` watches `get_mandates_by_owner` for a new active mandate granted to itself and, once one appears, autonomously pays `vendors/paid-api` through that sub-mandate (the only way its key can move NEAR) and calls **NEAR AI Cloud** to summarize the result.
+
+The agent (`npm run agent -- --m6`) gets six more tools on top of M5's two: `post_task`, `list_bids` (polls until enough bids arrive or it times out), `counter_offer`, `accept_bid`, `release_escrow` (fetches the winner's delivery, then releases the payment), and `create_sub_mandate`. Its M6 run: posts a scraping task → waits for both workers' bids → counter-offers the cheaper one → accepts the best final price (escrow locks) → receives the work and releases payment → delegates a 1 NEAR sub-mandate to `worker-summarizer`, which then pays and summarizes on its own. `npm run demo:m6` runs all of this in one command and prints a colored log with testnet explorer links for every on-chain step, plus a recap.
+
+To run the pieces by hand instead of `demo:m6`: `npm run paid-api`, `npm run worker-scraper`, `npm run worker-summarizer` in three terminals, then `npm run agent:m6` in a fourth.
+
 ## Deployments and proofs
 
 | Item | Value |
@@ -109,6 +128,15 @@ To run the two halves by hand instead of `demo:m5`: `npm run paid-api` in one te
 | Test payment, 0.1 NEAR agent → paid-api (`Paid`) | [`CKLuXywE…pfzqW`](https://testnet.nearblocks.io/txns/CKLuXywEZAq6qL3zRBnZrYkDxguWADzPHTuPotMpfzqW) |
 | Agent key restricted (full-access → function-call, scoped to Vault) | [`F9nxYdBv…8CKK`](https://testnet.nearblocks.io/txns/F9nxYdBv4SbDMyULCZfcEwVdRHEsyWutee4usAGA8CKK) |
 | Agent → paid-api payment via 402 flow, 0.3 NEAR (`Paid`) | [`9JZEDEpV…rWsSY`](https://testnet.nearblocks.io/txns/9JZEDEpVW1x557crJdtD4P52co55Gq1Av36YSiZrWsSY) |
+| worker-scraper key restricted (full-access → function-call, scoped to Vault) | [`AJRfaKnP…7Wfjmj`](https://testnet.nearblocks.io/txns/AJRfaKnPkQRBnTfdqhJ7JkNQcoyJroge5r6mpF7Wfjmj) |
+| worker-summarizer key restricted (full-access → function-call, scoped to Vault) | [`Ede9EKm7…uviQ64`](https://testnet.nearblocks.io/txns/Ede9EKm75Qjd2E7KrShK5QzdXUu3NXTxjR98xAuviQ64) |
+| M6 post_task (task 0, "Scrape NEAR agent wallet docs", max 0.4 NEAR) | [`43PQFjBm…4LQtUG`](https://testnet.nearblocks.io/txns/43PQFjBmWcdE69UMcuLff7CCPQFoM7LytzE3TV4LQtUG) |
+| M6 bids: worker-scraper 0.3 NEAR, worker-summarizer 0.35 NEAR | [`Ef7GZRMA…nB5sE`](https://testnet.nearblocks.io/txns/Ef7GZRMAqRcPmziX5ZUc6AtBK6S5LUxzzj3qP1tnB5sE), [`HqXuBMoe…cqvZjH`](https://testnet.nearblocks.io/txns/HqXuBMoeJq7N4gnTvixzErRqTWkTGgnsDfU53bcqvZjH) |
+| M6 counter-offer accepted: worker-scraper resubmits at 0.2 NEAR | [`36bQwwG1…Xn6WEt`](https://testnet.nearblocks.io/txns/36bQwwG1jLr7nQonh5qnyomp1WWz9wH2JD5XU9xn6WEt) |
+| M6 accept_bid (escrow lock, worker-scraper @ 0.2 NEAR) | [`CtLLHXsz…MSUf9VG`](https://testnet.nearblocks.io/txns/CtLLHXszzZn1WE7NKzVR7S5eoPYAkzF6RfAd8MSUf9VG) |
+| M6 release (escrow → worker-scraper, task `Released`) | [`745kcFZn…VYkHQS`](https://testnet.nearblocks.io/txns/745kcFZnasFvrdRpmJmj3itPBWRFWVD2NDy7UzVYkHQS) |
+| M6 create_sub_mandate (1 NEAR for worker-summarizer, mandate id 1) | [`EeJVAmcE…T7aEPQBN`](https://testnet.nearblocks.io/txns/EeJVAmcEGhfFXdFUEBCUGbRvGbPqQeSpmWhbT7aEPQBN) |
+| M6 worker-summarizer pay via its sub-mandate, 0.3 NEAR to paid-api | [`F6SRuTND…k59TX14o`](https://testnet.nearblocks.io/txns/F6SRuTNDy6C9bGZ7FhFEdHVZuKmJTVs6jQYuk59TX14o) |
 | Demo accounts (testnet) | `agent`, `worker-scraper`, `worker-summarizer`, `paid-api` `.vivek-meridian.testnet`; all ids and creation txs in [`deployments/testnet.json`](deployments/testnet.json) |
 | Hosted demo | _TODO_ |
 | Demo video | _TODO_ |
@@ -122,6 +150,7 @@ To run the two halves by hand instead of `demo:m5`: `npm run paid-api` in one te
 - Rust: `near-sdk` 5.30; tests: `near-sandbox`, `near-api`, `cargo-near-build`, `tokio`, `testresult`
 - Node scripts: `near-api-js` 7.4, `tsx`, `dotenv`, `typescript`; `near-cli-rs` for owner-signed transactions
 - Agent and paid API (M5): `openai` 7.55 (OpenAI-compatible client, pointed at NEAR AI Cloud), `express` 5.3
+- Worker marketplace (M6): same `openai`/`express`/`near-api-js`, no new dependencies
 - _TODO: remaining libraries as they are added._
 
 ## Roadmap
@@ -144,7 +173,7 @@ spider sensi
 - [x] M3 Pending approvals, sub-mandates, escrow, revoke, tests
 - [x] M4 Testnet deploy, `scripts/deploy.ts`, `scripts/seed.ts`
 - [x] M5 Agent with restricted function-call key + paid-API 402 flow
-- [ ] M6 Worker agents, bidding, counter-offer, escrow release
+- [x] M6 Worker agents, bidding, counter-offer, escrow release
 - [ ] M7 Dashboard: create mandate, live receipts, approvals, attack button
 - [ ] M8 `scripts/demo.ts` runs the full demo in one command
 

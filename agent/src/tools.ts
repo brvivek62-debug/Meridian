@@ -1,7 +1,14 @@
-/** The two tools exposed to the LLM for M5: check_budget and call_paid_api. */
+/**
+ * Tools exposed to the LLM: check_budget and call_paid_api (M5), plus the M6
+ * marketplace tools (post_task, list_bids, counter_offer, accept_bid,
+ * release_escrow, create_sub_mandate).
+ */
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { buildMemo, PAYMENT_FROM_HEADER, PAYMENT_TX_HEADER, type PaymentRequired } from '../../vendors/paid-api/protocol.ts';
-import { AGENT_ID, explorerTx, getMandate, mandateId, pay } from './vault.ts';
+import {
+  acceptBid, AGENT_ID, createSubMandate, explorerTx, getBids, getMandate, getTask, mandateId,
+  nearToYocto, pay, postTask, releaseEscrow,
+} from './vault.ts';
 
 export const toolSchemas: ChatCompletionTool[] = [
   {
@@ -29,7 +36,179 @@ export const toolSchemas: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'post_task',
+      description: "Post an open task to the Vault marketplace that any worker can bid on, funded from the agent's own mandate.",
+      parameters: {
+        type: 'object',
+        properties: {
+          description: { type: 'string', description: 'What the task is, e.g. "Scrape NEAR agent-wallet docs"' },
+          max_price_near: { type: 'string', description: 'Maximum price in NEAR, e.g. "0.4"' },
+        },
+        required: ['description', 'max_price_near'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_bids',
+      description: 'List bids on a task. Waits, polling, until at least min_bids bids have arrived or the timeout elapses.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'number' },
+          min_bids: { type: 'number', description: 'Wait until at least this many bids exist. Default 1.' },
+          timeout_ms: { type: 'number', description: 'Max time to wait, in milliseconds. Default 30000.' },
+        },
+        required: ['task_id'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'counter_offer',
+      description:
+        "Ask a worker to lower its bid on a task to a specific price. The worker's HTTP endpoint answers once: it either accepts (and resubmits its bid on-chain at that price) or rejects (its current bid stands).",
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'number' },
+          worker: { type: 'string', description: 'The worker account id to counter-offer.' },
+          price_near: { type: 'string', description: 'Proposed price in NEAR, e.g. "0.2"' },
+        },
+        required: ['task_id', 'worker', 'price_near'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'accept_bid',
+      description: "Accept a worker's current bid on a task. Runs the Vault's policy checks and locks the price in escrow.",
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'number' },
+          worker: { type: 'string' },
+        },
+        required: ['task_id', 'worker'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'release_escrow',
+      description: 'Fetch the delivered work from the winning worker and release the escrowed payment to them.',
+      parameters: {
+        type: 'object',
+        properties: { task_id: { type: 'number' } },
+        required: ['task_id'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_sub_mandate',
+      description:
+        "Delegate part of the agent's own mandate to another agent account as a sub-mandate. Every limit must be at or below this mandate's own limits, and the allowlist must be a subset of this mandate's allowlist.",
+      parameters: {
+        type: 'object',
+        properties: {
+          agent: { type: 'string', description: 'Account id to receive the sub-mandate, e.g. worker-summarizer.<owner>.testnet' },
+          budget_near: { type: 'string' },
+          per_tx_cap_near: { type: 'string' },
+          daily_cap_near: { type: 'string' },
+          allowlist: { type: 'array', items: { type: 'string' } },
+          approval_threshold_near: { type: 'string' },
+        },
+        required: ['agent', 'budget_near', 'per_tx_cap_near', 'daily_cap_near', 'allowlist', 'approval_threshold_near'],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
+
+/** Where to reach a worker's HTTP endpoint, by account id. */
+function workerUrl(workerId: string): string {
+  if (workerId === process.env.WORKER_SCRAPER_ACCOUNT_ID) return process.env.WORKER_SCRAPER_URL ?? 'http://localhost:4031';
+  if (workerId === process.env.WORKER_SUMMARIZER_ACCOUNT_ID) return process.env.WORKER_SUMMARIZER_URL ?? 'http://localhost:4032';
+  throw new Error(`no known HTTP endpoint for worker ${workerId}`);
+}
+
+export async function postTaskTool(args: { description: string; max_price_near: string }): Promise<string> {
+  const id = mandateId();
+  const maxPrice = nearToYocto(args.max_price_near as `${number}`);
+  const { taskId, hash } = await postTask(id, args.description, maxPrice);
+  return JSON.stringify({ taskId, tx: hash, explorer: explorerTx(hash) });
+}
+
+export async function listBidsTool(args: { task_id: number; min_bids?: number; timeout_ms?: number }): Promise<string> {
+  const minBids = args.min_bids ?? 1;
+  const deadline = Date.now() + (args.timeout_ms ?? 30_000);
+  let bids = await getBids(args.task_id);
+  while (bids.length < minBids && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 1500));
+    bids = await getBids(args.task_id);
+  }
+  return JSON.stringify({ bids });
+}
+
+export async function counterOfferTool(args: { task_id: number; worker: string; price_near: string }): Promise<string> {
+  const res = await fetch(`${workerUrl(args.worker)}/counter-offer`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ taskId: args.task_id, priceNear: args.price_near }),
+  });
+  if (!res.ok) throw new Error(`counter-offer to ${args.worker} failed: HTTP ${res.status}`);
+  return JSON.stringify(await res.json());
+}
+
+export async function acceptBidTool(args: { task_id: number; worker: string }): Promise<string> {
+  const { result, hash } = await acceptBid(args.task_id, args.worker);
+  return JSON.stringify({ ...result, tx: hash, explorer: explorerTx(hash) });
+}
+
+export async function releaseEscrowTool(args: { task_id: number }): Promise<string> {
+  const task = await getTask(args.task_id);
+  if (!task || !task.worker) throw new Error(`task ${args.task_id} has no assigned worker`);
+  const deliverRes = await fetch(`${workerUrl(task.worker)}/deliver/${args.task_id}`);
+  if (!deliverRes.ok) throw new Error(`delivery fetch from ${task.worker} failed: HTTP ${deliverRes.status}`);
+  const delivery = await deliverRes.json();
+  const { result, hash } = await releaseEscrow(args.task_id);
+  return JSON.stringify({ delivery, ...result, tx: hash, explorer: explorerTx(hash) });
+}
+
+export async function createSubMandateTool(args: {
+  agent: string;
+  budget_near: string;
+  per_tx_cap_near: string;
+  daily_cap_near: string;
+  allowlist: string[];
+  approval_threshold_near: string;
+}): Promise<string> {
+  const parentId = mandateId();
+  const { childId, hash } = await createSubMandate(
+    parentId,
+    args.agent,
+    nearToYocto(args.budget_near as `${number}`),
+    nearToYocto(args.per_tx_cap_near as `${number}`),
+    nearToYocto(args.daily_cap_near as `${number}`),
+    args.allowlist,
+    nearToYocto(args.approval_threshold_near as `${number}`),
+  );
+  return JSON.stringify({ childId, tx: hash, explorer: explorerTx(hash) });
+}
 
 export async function checkBudget(): Promise<string> {
   const id = mandateId();
