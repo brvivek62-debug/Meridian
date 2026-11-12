@@ -51,6 +51,118 @@ body {
   animation: flash-blocked 1.4s ease-out;
 }
 
+/* "The line" — see components/TheLine.tsx. All under 1.5s total. */
+@keyframes coin-pass {
+  0% {
+    left: 8%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  45% {
+    left: 50%;
+    transform: translateY(-50%) scale(1.15);
+  }
+  58% {
+    transform: translateY(-50%) scale(1);
+  }
+  100% {
+    left: 88%;
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+@keyframes coin-block {
+  0% {
+    left: 8%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  65% {
+    left: 48%;
+    transform: translateY(-50%) scale(1);
+  }
+  74% {
+    left: 50%;
+    opacity: 1;
+    transform: translateY(-50%) scale(1.15);
+  }
+  76% {
+    opacity: 0;
+  }
+  100% {
+    left: 50%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.2);
+  }
+}
+
+@keyframes coin-refused {
+  0% {
+    left: 8%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  60% {
+    left: 24%;
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  100% {
+    left: 26%;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.4);
+  }
+}
+
+@keyframes particle-burst {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) scale(1);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateX(28px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes line-text-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 20px);
+  }
+}
+
+@keyframes line-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.6);
+    opacity: 0;
+  }
+}
+
 ::selection {
   background: color-mix(in srgb, var(--color-accent) 35%, transparent);
 }

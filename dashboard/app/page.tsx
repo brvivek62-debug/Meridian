@@ -7,6 +7,7 @@ import { ApprovalsInbox } from '@/components/ApprovalsInbox';
 import { CreateMandateForm } from '@/components/CreateMandateForm';
 import { DelegationTree } from '@/components/DelegationTree';
 import { MandateCard } from '@/components/MandateCard';
+import { TheLine, type LineJob } from '@/components/TheLine';
 import { shortAccount } from '@/lib/format';
 import type { DashboardState } from '@/lib/types';
 
@@ -15,6 +16,7 @@ const POLL_MS = 4000;
 export default function Page() {
   const [state, setState] = useState<DashboardState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lineJob, setLineJob] = useState<LineJob | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -43,6 +45,9 @@ export default function Page() {
       });
       const body = await res.json();
       await refresh();
+      if (res.ok) {
+        setLineJob({ id: `pending-${pendingId}-${Date.now()}`, outcome: body.status === 'Paid' ? 'paid' : 'blocked', reason: body.reason ?? null });
+      }
       return res.ok ? { ok: true, status: body.status, explorer: body.explorer } : { ok: false, error: body.error };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -58,6 +63,9 @@ export default function Page() {
       });
       const body = await res.json();
       await refresh();
+      if (res.ok) {
+        setLineJob({ id: `attack-${mandateId}-${Date.now()}`, outcome: body.status === 'Blocked' ? 'blocked' : 'paid', reason: body.reason ?? null });
+      }
       return res.ok
         ? { ok: true, status: body.status, reason: body.reason, explorer: body.explorer }
         : { ok: false, error: body.error };
@@ -117,6 +125,10 @@ export default function Page() {
       )}
 
       {!state && !error && <p className="font-mono text-sm text-offwhite/50">Loading live state from {`vault.*.testnet`}&hellip;</p>}
+
+      <div className="mb-8">
+        <TheLine job={lineJob} />
+      </div>
 
       {state && (
         <div className="space-y-10">

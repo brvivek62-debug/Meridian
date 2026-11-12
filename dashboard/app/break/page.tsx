@@ -6,6 +6,7 @@ import { DemoModeBadge } from '@/components/Badge';
 import { AttackConsole, type SubmitResult } from '@/components/break/AttackConsole';
 import { HallOfAttempts } from '@/components/break/HallOfAttempts';
 import { Scoreboard } from '@/components/break/Scoreboard';
+import { TheLine, type LineJob } from '@/components/TheLine';
 import type { PublicAttempt } from '@/lib/breakStore';
 import type { Scoreboard as ScoreboardData } from '@/lib/breakStore';
 
@@ -22,6 +23,7 @@ interface BreakState {
 export default function BreakPage() {
   const [state, setState] = useState<BreakState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lineJob, setLineJob] = useState<LineJob | null>(null);
   const busyRef = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -54,6 +56,11 @@ export default function BreakPage() {
       const body = await res.json();
       if (!res.ok) return { ok: false, error: body.error ?? `HTTP ${res.status}` };
       setState(body);
+      setLineJob({
+        id: body.attempt.id,
+        outcome: !body.attempt.fooled ? 'refused' : body.attempt.vaultStatus === 'Paid' ? 'paid' : 'blocked',
+        reason: body.attempt.reason,
+      });
       return { ok: true, attempt: body.attempt };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -84,6 +91,10 @@ export default function BreakPage() {
 
       <div className="mb-6">
         <Scoreboard data={state?.scoreboard ?? null} />
+      </div>
+
+      <div className="mb-6">
+        <TheLine job={lineJob} />
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2">
