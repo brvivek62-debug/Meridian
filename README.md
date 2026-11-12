@@ -118,6 +118,20 @@ The agent (`npm run agent -- --m6`) gets six more tools on top of M5's two: `pos
 
 To run the pieces by hand instead of `demo:m6`: `npm run paid-api`, `npm run worker-scraper`, `npm run worker-summarizer` in three terminals, then `npm run agent:m6` in a fourth.
 
+### Dashboard (M7)
+
+```bash
+npm run setup-dashboard     # creates demo-owner.<owner>.testnet, writes its key to .env, one-shot
+npm run dashboard           # → http://localhost:3000
+```
+
+`dashboard/` is a Next.js (App Router) + Tailwind app that polls the Vault's view methods over testnet RPC every 4s — it never needs a key to read. It shows, for every mandate it finds (the real owner's and the dashboard's own sandbox ones): a budget meter (spent/locked/delegated vs. budget, caps, allowlist chips), a receipts feed (Payment, Pending, Blocked in red, EscrowLock/Release, Refund, Delegation — a new Blocked receipt flashes red), a task board (open/locked/released, with bids and the final price), and a delegation tree (owner → mandate → sub-mandates, outline-only, no fills).
+
+**Signing.** Owner-only actions — create mandate, approve, reject — and the attack button are server-side API routes (`dashboard/app/api/*`, Node runtime) signed by a dedicated `demo-owner.<owner>.testnet` account (`npm run setup-dashboard`), never the real owner's near-cli-rs keychain key. NEAR's testnet faucet only mints new top-level accounts, not sub-accounts of an existing one, so — like every other demo account in this repo — demo-owner is funded from the real owner's balance, not a third-party faucet. Unlike those accounts, demo-owner's private key is written to `.env` (`DEMO_OWNER_PRIVATE_KEY`) rather than `~/.near-credentials`, so the dashboard's server can read it; it is never sent to the browser. The **Create mandate** form always creates new mandates owned by demo-owner (agent defaults to demo-owner too, so it can also approve/reject its own pending payments); the **Approvals inbox** shows the real owner's pending payments read-only (there usually aren't any, since M5/M6 payments stay under its 0.8 NEAR threshold) and lets the dashboard act only on demo-owner's own.
+The **attack button** ("Inject malicious instruction") models a prompt-injected agent deciding to send everything to `attacker.testnet`: it calls `Vault.pay` directly with the target mandate's own agent key (the real agent's restricted key from `~/.near-credentials` for the production mandate, demo-owner's key for a sandbox one) for the mandate's full budget. The question isn't whether an LLM would refuse — ours does, in `agent/src/llm.ts` — it's that the Vault blocks it on-chain regardless, exactly as PLAN.md's demo script describes.
+
+Because the Vault's `Receipt` doesn't record a transaction hash (only `Mandate`/`Task`/`Bid` ids and amounts), the receipts feed links each receipt's recipient to its explorer **account** page rather than a specific tx; every action the dashboard itself performs (create mandate, approve, reject, attack) shows the real tx hash and explorer link it gets back from signing that call.
+
 ## Deployments and proofs
 
 | Item | Value |
@@ -137,7 +151,12 @@ To run the pieces by hand instead of `demo:m6`: `npm run paid-api`, `npm run wor
 | M6 release (escrow → worker-scraper, task `Released`) | [`745kcFZn…VYkHQS`](https://testnet.nearblocks.io/txns/745kcFZnasFvrdRpmJmj3itPBWRFWVD2NDy7UzVYkHQS) |
 | M6 create_sub_mandate (1 NEAR for worker-summarizer, mandate id 1) | [`EeJVAmcE…T7aEPQBN`](https://testnet.nearblocks.io/txns/EeJVAmcEGhfFXdFUEBCUGbRvGbPqQeSpmWhbT7aEPQBN) |
 | M6 worker-summarizer pay via its sub-mandate, 0.3 NEAR to paid-api | [`F6SRuTND…k59TX14o`](https://testnet.nearblocks.io/txns/F6SRuTNDy6C9bGZ7FhFEdHVZuKmJTVs6jQYuk59TX14o) |
-| Demo accounts (testnet) | `agent`, `worker-scraper`, `worker-summarizer`, `paid-api` `.vivek-meridian.testnet`; all ids and creation txs in [`deployments/testnet.json`](deployments/testnet.json) |
+| demo-owner account created (M7), funded 5 NEAR from the owner | [`EMWbRxeH…ZZv58`](https://testnet.nearblocks.io/txns/EMWbRxeHfeekmK9iyTmzk9U7UNQWpeuMJkPVMfYZZv58) |
+| Dashboard create_mandate (demo mandate id 2, 2 NEAR, via demo-owner) | [`JAs46Xqf…Z0wAcb`](https://testnet.nearblocks.io/txns/JAs46XqfiLj34b42XHyPK3peHYHdHBBjJKK6gFeZwAcb) |
+| Dashboard approve (pending → `Paid`, 0.45 NEAR) | [`Bm5A9qtd…a4t1Vf21`](https://testnet.nearblocks.io/txns/Bm5A9qtdi7v2WBDTnikzAR9JacPLEXXUjvxKa4t1Vf21) |
+| Dashboard reject (`Rejected`) | [`6P2CaCcX…BZu91HL`](https://testnet.nearblocks.io/txns/6P2CaCcXTS29ZZoRxEKcXhp7UQv2yVqnUBtzBZu91HL) |
+| Dashboard attack button on the production mandate 0 → `Blocked` | [`78xW26ic…z4Qn6oH`](https://testnet.nearblocks.io/txns/78xW26ic1JAA2nTuVPmS3u2GNcCwfhRu4F9YWz4Qn6oH) |
+| Demo accounts (testnet) | `agent`, `worker-scraper`, `worker-summarizer`, `paid-api`, `demo-owner` `.vivek-meridian.testnet`; all ids and creation txs in [`deployments/testnet.json`](deployments/testnet.json) |
 | Hosted demo | _TODO_ |
 | Demo video | _TODO_ |
 | Chain Signatures payment (Sepolia) tx | _TODO_ |
@@ -151,6 +170,7 @@ To run the pieces by hand instead of `demo:m6`: `npm run paid-api`, `npm run wor
 - Node scripts: `near-api-js` 7.4, `tsx`, `dotenv`, `typescript`; `near-cli-rs` for owner-signed transactions
 - Agent and paid API (M5): `openai` 7.55 (OpenAI-compatible client, pointed at NEAR AI Cloud), `express` 5.3
 - Worker marketplace (M6): same `openai`/`express`/`near-api-js`, no new dependencies
+- Dashboard (M7): Next.js 16, React 19, Tailwind CSS 4, `near-api-js` (its own `dashboard/package.json`)
 - _TODO: remaining libraries as they are added._
 
 ## Roadmap
@@ -174,10 +194,10 @@ spider sensi
 - [x] M4 Testnet deploy, `scripts/deploy.ts`, `scripts/seed.ts`
 - [x] M5 Agent with restricted function-call key + paid-API 402 flow
 - [x] M6 Worker agents, bidding, counter-offer, escrow release
-- [ ] M7 Dashboard: create mandate, live receipts, approvals, attack button
+- [x] M7 Dashboard: create mandate, live receipts, approvals, attack button
 - [ ] M8 `scripts/demo.ts` runs the full demo in one command
 
 ### SHOULD
 - [ ] S1 Chain Signatures Sepolia payment via `authorize_foreign_payment`
 - [ ] S2 1Click quote in live flow + one real mainnet swap recorded
-- [ ] S3 Delegation tree visualization
+- [x] S3 Delegation tree visualization

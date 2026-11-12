@@ -12,6 +12,7 @@ neardev/
 # Build output
 target/
 .next/
+*.tsbuildinfo
 
 # OS / editor
 .DS_Store

@@ -6,14 +6,16 @@
     "agent": "agent.vivek-meridian.testnet",
     "workerScraper": "worker-scraper.vivek-meridian.testnet",
     "workerSummarizer": "worker-summarizer.vivek-meridian.testnet",
-    "paidApi": "paid-api.vivek-meridian.testnet"
+    "paidApi": "paid-api.vivek-meridian.testnet",
+    "demoOwner": "demo-owner.vivek-meridian.testnet"
   },
   "createTxs": {
     "vault": "BATJ6nSABhTpYY9BYeFGL8KGvrkQ5DxZqfXg1Ado3ebd",
     "agent": "5TAq7FtbxfznDiFqnvtLdiHbAw6r1QCdN4w5jVivP95u",
     "workerScraper": "7CFgGKctHdDbcU9BJcQ37iQrPJ3e83LYhAU2Rw5nsKZH",
     "workerSummarizer": "GdnKFUYUpsU4YY1coLTgabnnhr2ABGhCCBg5eAZ78XGd",
-    "paidApi": "EnGPmEDC5r2xE68LJR9VZ8tGrUFqjuGvZDQ1ocv5WJzy"
+    "paidApi": "EnGPmEDC5r2xE68LJR9VZ8tGrUFqjuGvZDQ1ocv5WJzy",
+    "demoOwner": "EMWbRxeHfeekmK9iyTmzk9U7UNQWpeuMJkPVMfYZZv58"
   },
   "vault": {
     "contractId": "vault.vivek-meridian.testnet",

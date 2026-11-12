@@ -10,6 +10,7 @@
   "scripts": {
     "deploy": "tsx scripts/deploy.ts",
     "seed": "tsx scripts/seed.ts",
+    "setup-dashboard": "tsx scripts/setup-dashboard.ts",
     "setup-agent-key": "tsx scripts/setup-agent-key.ts",
     "setup-worker-keys": "tsx scripts/setup-worker-keys.ts",
     "prove-no-bypass": "tsx scripts/prove-key-restriction.ts",
@@ -20,6 +21,7 @@
     "agent:m6": "tsx agent/src/index.ts --m6",
     "demo:m5": "tsx scripts/demo-m5.ts",
     "demo:m6": "tsx scripts/demo-m6.ts",
+    "dashboard": "npm --prefix dashboard run dev",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

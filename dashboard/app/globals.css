@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-navy: #0a1628;
+  --color-navy-raised: #0e2039;
+  --color-navy-raised-2: #122646;
+  --color-offwhite: #f2f1ec;
+  --color-accent: #2f8cff;
+  --color-danger: #ff5c5c;
+  --font-mono: ui-monospace, sfmono-regular, menlo, consolas, 'liberation mono', monospace;
+  --font-sans: -apple-system, blinkmacsystemfont, 'Segoe UI', roboto, helvetica, arial, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-navy);
+  color: var(--color-offwhite);
+}
+
+* {
+  border-color: color-mix(in srgb, var(--color-offwhite) 12%, transparent);
+}
+
+@keyframes enter-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flash-blocked {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  20%,
+  60% {
+    background-color: color-mix(in srgb, var(--color-danger) 18%, transparent);
+  }
+}
+
+.enter-fade {
+  animation: enter-fade 220ms ease-out;
+}
+
+.flash-blocked {
+  animation: flash-blocked 1.4s ease-out;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-offwhite) 15%, transparent);
+  border-radius: 6px;
+}
