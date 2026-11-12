@@ -6,7 +6,7 @@
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { buildMemo, PAYMENT_FROM_HEADER, PAYMENT_TX_HEADER, type PaymentRequired } from '../../vendors/paid-api/protocol.ts';
 import {
-  acceptBid, AGENT_ID, createSubMandate, explorerTx, getBids, getMandate, getTask, mandateId,
+  acceptBid, type AgentIdentity, createSubMandate, explorerTx, getBids, getMandate, getTask,
   nearToYocto, pay, postTask, releaseEscrow,
 } from './vault.ts';
 
@@ -137,7 +137,30 @@ export const toolSchemas: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'send_payment',
+      description: 'Send NEAR directly to an account through the Vault, e.g. for a refund, reward, bounty or tip. The Vault enforces the mandate (budget, caps, allowlist) on-chain regardless of what you decide here.',
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Recipient account id, e.g. someone.testnet' },
+          amount_near: { type: 'string', description: 'Amount in NEAR, e.g. "0.5"' },
+          memo: { type: 'string', description: 'Short memo explaining the payment.' },
+        },
+        required: ['to', 'amount_near', 'memo'],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
+
+export const TOOL_NAMES_M5 = ['check_budget', 'call_paid_api'] as const;
+export const TOOL_NAMES_M6 = [
+  'check_budget', 'call_paid_api', 'post_task', 'list_bids', 'counter_offer', 'accept_bid', 'release_escrow', 'create_sub_mandate',
+] as const;
+export const TOOL_NAMES_BREAK = ['check_budget', 'send_payment'] as const;
 
 /** Where to reach a worker's HTTP endpoint, by account id. */
 function workerUrl(workerId: string): string {
@@ -146,10 +169,9 @@ function workerUrl(workerId: string): string {
   throw new Error(`no known HTTP endpoint for worker ${workerId}`);
 }
 
-export async function postTaskTool(args: { description: string; max_price_near: string }): Promise<string> {
-  const id = mandateId();
+export async function postTaskTool(identity: AgentIdentity, args: { description: string; max_price_near: string }): Promise<string> {
   const maxPrice = nearToYocto(args.max_price_near as `${number}`);
-  const { taskId, hash } = await postTask(id, args.description, maxPrice);
+  const { taskId, hash } = await postTask(identity.accountId, identity.mandateId, args.description, maxPrice);
   return JSON.stringify({ taskId, tx: hash, explorer: explorerTx(hash) });
 }
 
@@ -174,22 +196,22 @@ export async function counterOfferTool(args: { task_id: number; worker: string; 
   return JSON.stringify(await res.json());
 }
 
-export async function acceptBidTool(args: { task_id: number; worker: string }): Promise<string> {
-  const { result, hash } = await acceptBid(args.task_id, args.worker);
+export async function acceptBidTool(identity: AgentIdentity, args: { task_id: number; worker: string }): Promise<string> {
+  const { result, hash } = await acceptBid(identity.accountId, args.task_id, args.worker);
   return JSON.stringify({ ...result, tx: hash, explorer: explorerTx(hash) });
 }
 
-export async function releaseEscrowTool(args: { task_id: number }): Promise<string> {
+export async function releaseEscrowTool(identity: AgentIdentity, args: { task_id: number }): Promise<string> {
   const task = await getTask(args.task_id);
   if (!task || !task.worker) throw new Error(`task ${args.task_id} has no assigned worker`);
   const deliverRes = await fetch(`${workerUrl(task.worker)}/deliver/${args.task_id}`);
   if (!deliverRes.ok) throw new Error(`delivery fetch from ${task.worker} failed: HTTP ${deliverRes.status}`);
   const delivery = await deliverRes.json();
-  const { result, hash } = await releaseEscrow(args.task_id);
+  const { result, hash } = await releaseEscrow(identity.accountId, args.task_id);
   return JSON.stringify({ delivery, ...result, tx: hash, explorer: explorerTx(hash) });
 }
 
-export async function createSubMandateTool(args: {
+export async function createSubMandateTool(identity: AgentIdentity, args: {
   agent: string;
   budget_near: string;
   per_tx_cap_near: string;
@@ -197,9 +219,9 @@ export async function createSubMandateTool(args: {
   allowlist: string[];
   approval_threshold_near: string;
 }): Promise<string> {
-  const parentId = mandateId();
   const { childId, hash } = await createSubMandate(
-    parentId,
+    identity.accountId,
+    identity.mandateId,
     args.agent,
     nearToYocto(args.budget_near as `${number}`),
     nearToYocto(args.per_tx_cap_near as `${number}`),
@@ -210,12 +232,16 @@ export async function createSubMandateTool(args: {
   return JSON.stringify({ childId, tx: hash, explorer: explorerTx(hash) });
 }
 
-export async function checkBudget(): Promise<string> {
-  const id = mandateId();
-  const m = await getMandate(id);
+export async function sendPaymentTool(identity: AgentIdentity, args: { to: string; amount_near: string; memo: string }): Promise<string> {
+  const { result, hash } = await pay(identity.accountId, identity.mandateId, args.to, nearToYocto(args.amount_near as `${number}`), args.memo);
+  return JSON.stringify({ ...result, tx: hash, explorer: explorerTx(hash) });
+}
+
+export async function checkBudget(identity: AgentIdentity): Promise<string> {
+  const m = await getMandate(identity.mandateId);
   const remaining = BigInt(m.budget) - BigInt(m.spent);
   return JSON.stringify({
-    mandateId: id,
+    mandateId: identity.mandateId,
     active: m.active,
     remainingYocto: remaining.toString(),
     perTxCapYocto: m.per_tx_cap,
@@ -229,7 +255,7 @@ export interface PaidApiLog {
   detail: string;
 }
 
-export async function callPaidApi(url: string, onLog?: (log: PaidApiLog) => void): Promise<string> {
+export async function callPaidApi(identity: AgentIdentity, url: string, onLog?: (log: PaidApiLog) => void): Promise<string> {
   const first = await fetch(url);
   if (first.status !== 402) {
     if (!first.ok) throw new Error(`${url} → HTTP ${first.status}`);
@@ -238,14 +264,13 @@ export async function callPaidApi(url: string, onLog?: (log: PaidApiLog) => void
   const quoteBody = (await first.json()) as PaymentRequired;
   onLog?.({ step: 'quoted', detail: `402 Payment Required — ${quoteBody.priceNear} to ${quoteBody.payTo}, nonce ${quoteBody.memoNonce}` });
 
-  const id = mandateId();
-  const { result, hash } = await pay(id, quoteBody.payTo, BigInt(quoteBody.price), buildMemo(quoteBody.memoNonce));
+  const { result, hash } = await pay(identity.accountId, identity.mandateId, quoteBody.payTo, BigInt(quoteBody.price), buildMemo(quoteBody.memoNonce));
   if (result.status !== 'Paid') {
     throw new Error(`Vault.pay did not succeed: ${result.status}${result.reason ? ` (${result.reason})` : ''}`);
   }
   onLog?.({ step: 'paid', detail: `Vault.pay → Paid, receipt ${result.receipt_id} — ${explorerTx(hash)}` });
 
-  const second = await fetch(url, { headers: { [PAYMENT_TX_HEADER]: hash, [PAYMENT_FROM_HEADER]: AGENT_ID } });
+  const second = await fetch(url, { headers: { [PAYMENT_TX_HEADER]: hash, [PAYMENT_FROM_HEADER]: identity.accountId } });
   if (!second.ok) throw new Error(`retry after payment failed: HTTP ${second.status} ${await second.text()}`);
   const data = await second.json();
   onLog?.({ step: 'data', detail: '200 OK — data returned' });

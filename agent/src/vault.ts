@@ -1,9 +1,20 @@
-/** The agent's view of the Vault: the only way this account can make anything move. */
+/**
+ * The agent's view of the Vault: the only way an agent account can make
+ * anything move. Every signing function takes an explicit `signerId` so the
+ * same code path serves any agent identity — the default CLI agent
+ * (agent/src/index.ts, M5/M6) and the dashboard's break-agent (dashboard/app/api/break)
+ * alike. `defaultIdentity()` reproduces the CLI's original behavior exactly.
+ */
 import { nearToYocto, teraToGas } from 'near-api-js';
 import { account, explorerTx, readDeployments, requireEnv, txHash, txValue, view } from '../../scripts/lib/near.ts';
 
 export const VAULT_ID = requireEnv('VAULT_CONTRACT_ID');
 export const AGENT_ID = requireEnv('AGENT_ACCOUNT_ID');
+
+export interface AgentIdentity {
+  accountId: string;
+  mandateId: number;
+}
 
 export function mandateId(): number {
   const override = process.env.AGENT_MANDATE_ID;
@@ -13,6 +24,11 @@ export function mandateId(): number {
     throw new Error('No mandate id available. Set AGENT_MANDATE_ID in .env or run `npm run seed`.');
   }
   return d.seed.mandateId;
+}
+
+/** The CLI agent's identity (M5/M6): AGENT_ACCOUNT_ID and its mandate from .env/deployments. */
+export function defaultIdentity(): AgentIdentity {
+  return { accountId: AGENT_ID, mandateId: mandateId() };
 }
 
 export interface Mandate {
@@ -39,14 +55,15 @@ export async function getMandate(id: number): Promise<Mandate> {
   return m;
 }
 
-/** Pay through the Vault. This is the only path the agent's restricted key can use to move NEAR. */
+/** Pay through the Vault. For a properly restricted key, this is the only path that can move NEAR. */
 export async function pay(
+  signerId: string,
   id: number,
   to: string,
   amountYocto: bigint,
   memo: string,
 ): Promise<{ result: ActionResult; hash: string }> {
-  const res = await account(AGENT_ID).callFunctionRaw({
+  const res = await account(signerId).callFunctionRaw({
     contractId: VAULT_ID,
     methodName: 'pay',
     args: { mandate_id: id, to, amount: amountYocto.toString(), memo },
@@ -77,8 +94,13 @@ function asNumber(v: unknown): number {
 }
 
 /** Post an open task to the marketplace. Returns its id. */
-export async function postTask(id: number, description: string, maxPriceYocto: bigint): Promise<{ taskId: number; hash: string }> {
-  const res = await account(AGENT_ID).callFunctionRaw({
+export async function postTask(
+  signerId: string,
+  id: number,
+  description: string,
+  maxPriceYocto: bigint,
+): Promise<{ taskId: number; hash: string }> {
+  const res = await account(signerId).callFunctionRaw({
     contractId: VAULT_ID,
     methodName: 'post_task',
     args: { mandate_id: id, description, max_price: maxPriceYocto.toString() },
@@ -95,9 +117,9 @@ export async function getBids(taskId: number): Promise<Bid[]> {
   return view<Bid[]>(VAULT_ID, 'get_bids', { task_id: taskId });
 }
 
-/** Accept a worker's bid. Runs the Vault's policy checks and locks the price in escrow. */
-export async function acceptBid(taskId: number, worker: string): Promise<{ result: ActionResult; hash: string }> {
-  const res = await account(AGENT_ID).callFunctionRaw({
+/** Accept a worker's bid. Runs the Vault's policy checks (including the allowlist) and locks the price in escrow. */
+export async function acceptBid(signerId: string, taskId: number, worker: string): Promise<{ result: ActionResult; hash: string }> {
+  const res = await account(signerId).callFunctionRaw({
     contractId: VAULT_ID,
     methodName: 'accept_bid',
     args: { task_id: taskId, worker },
@@ -107,8 +129,8 @@ export async function acceptBid(taskId: number, worker: string): Promise<{ resul
 }
 
 /** Pay the escrowed price to the worker. */
-export async function releaseEscrow(taskId: number): Promise<{ result: ActionResult; hash: string }> {
-  const res = await account(AGENT_ID).callFunctionRaw({
+export async function releaseEscrow(signerId: string, taskId: number): Promise<{ result: ActionResult; hash: string }> {
+  const res = await account(signerId).callFunctionRaw({
     contractId: VAULT_ID,
     methodName: 'release',
     args: { task_id: taskId },
@@ -119,6 +141,7 @@ export async function releaseEscrow(taskId: number): Promise<{ result: ActionRes
 
 /** Delegate part of this agent's own mandate to another agent account. Returns the child mandate id. */
 export async function createSubMandate(
+  signerId: string,
   parentId: number,
   agent: string,
   budgetYocto: bigint,
@@ -127,7 +150,7 @@ export async function createSubMandate(
   allowlist: string[],
   approvalThresholdYocto: bigint,
 ): Promise<{ childId: number; hash: string }> {
-  const res = await account(AGENT_ID).callFunctionRaw({
+  const res = await account(signerId).callFunctionRaw({
     contractId: VAULT_ID,
     methodName: 'create_sub_mandate',
     args: {

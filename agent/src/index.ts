@@ -9,6 +9,8 @@
  */
 import 'dotenv/config';
 import { runAgent } from './llm.ts';
+import { TOOL_NAMES_M5, TOOL_NAMES_M6 } from './tools.ts';
+import { defaultIdentity } from './vault.ts';
 
 const DEFAULT_QUESTION =
   'Using the paid research API at ' +
@@ -48,7 +50,9 @@ const question = isM6 ? m6Goal() : argv.join(' ').trim() || DEFAULT_QUESTION;
 
 async function main() {
   console.log(`[agent] question: ${question}\n`);
-  const answer = await runAgent(question, (line) => console.log(line));
+  const answer = await runAgent(defaultIdentity(), question, (line) => console.log(line), {
+    toolNames: isM6 ? TOOL_NAMES_M6 : TOOL_NAMES_M5,
+  });
   console.log(`\n[agent] answer:\n${answer}`);
 }
 

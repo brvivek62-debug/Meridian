@@ -1,10 +1,11 @@
 /** LLM tool-calling loop on NEAR AI Cloud (OpenAI-compatible). Never logs the API key. */
 import OpenAI from 'openai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { dim, green, yellow } from '../../scripts/lib/colors.ts';
+import type { AgentIdentity } from './vault.ts';
 import {
   acceptBidTool, callPaidApi, checkBudget, counterOfferTool, createSubMandateTool, listBidsTool,
-  postTaskTool, releaseEscrowTool, toolSchemas, type PaidApiLog,
+  postTaskTool, releaseEscrowTool, sendPaymentTool, toolSchemas, type PaidApiLog,
 } from './tools.ts';
 
 function requireEnv(name: string): string {
@@ -58,14 +59,34 @@ function logToolResult(name: string, output: string, onLog: (line: string) => vo
   }
 }
 
-export async function runAgent(question: string, onLog: (line: string) => void): Promise<string> {
+export interface RunAgentOptions {
+  /** Restrict the tools offered to the LLM to this subset of toolSchemas (by name). Default: all. */
+  toolNames?: readonly string[];
+  /** Override the system prompt (default: the standard Meridian spending-agent persona). */
+  systemPrompt?: string;
+  /** Override the model (default: LLM_MODEL from .env). */
+  model?: string;
+  /** Override the turn limit (default: 20). */
+  maxTurns?: number;
+}
+
+export async function runAgent(
+  identity: AgentIdentity,
+  question: string,
+  onLog: (line: string) => void,
+  options: RunAgentOptions = {},
+): Promise<string> {
+  const tools: ChatCompletionTool[] = options.toolNames
+    ? toolSchemas.filter((t) => t.type === 'function' && options.toolNames!.includes(t.function.name))
+    : toolSchemas;
   const messages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: options.systemPrompt ?? SYSTEM_PROMPT },
     { role: 'user', content: question },
   ];
 
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const completion = await client.chat.completions.create({ model: MODEL, messages, tools: toolSchemas });
+  const maxTurns = options.maxTurns ?? MAX_TURNS;
+  for (let turn = 0; turn < maxTurns; turn++) {
+    const completion = await client.chat.completions.create({ model: options.model ?? MODEL, messages, tools });
     const msg = completion.choices[0]?.message;
     if (!msg) throw new Error('no message in LLM response');
     messages.push(msg);
@@ -79,21 +100,23 @@ export async function runAgent(question: string, onLog: (line: string) => void):
       let output: string;
       try {
         if (call.function.name === 'check_budget') {
-          output = await checkBudget();
+          output = await checkBudget(identity);
         } else if (call.function.name === 'call_paid_api') {
-          output = await callPaidApi(args.url, (log: PaidApiLog) => onLog(`  [${log.step}] ${log.detail}`));
+          output = await callPaidApi(identity, args.url, (log: PaidApiLog) => onLog(`  [${log.step}] ${log.detail}`));
         } else if (call.function.name === 'post_task') {
-          output = await postTaskTool(args);
+          output = await postTaskTool(identity, args);
         } else if (call.function.name === 'list_bids') {
           output = await listBidsTool(args);
         } else if (call.function.name === 'counter_offer') {
           output = await counterOfferTool(args);
         } else if (call.function.name === 'accept_bid') {
-          output = await acceptBidTool(args);
+          output = await acceptBidTool(identity, args);
         } else if (call.function.name === 'release_escrow') {
-          output = await releaseEscrowTool(args);
+          output = await releaseEscrowTool(identity, args);
         } else if (call.function.name === 'create_sub_mandate') {
-          output = await createSubMandateTool(args);
+          output = await createSubMandateTool(identity, args);
+        } else if (call.function.name === 'send_payment') {
+          output = await sendPaymentTool(identity, args);
         } else {
           output = JSON.stringify({ error: `unknown tool ${call.function.name}` });
         }
@@ -104,5 +127,5 @@ export async function runAgent(question: string, onLog: (line: string) => void):
       messages.push({ role: 'tool', tool_call_id: call.id, content: output });
     }
   }
-  throw new Error(`agent did not converge within ${MAX_TURNS} turns`);
+  throw new Error(`agent did not converge within ${maxTurns} turns`);
 }
