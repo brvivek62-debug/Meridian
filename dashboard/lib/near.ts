@@ -36,9 +36,12 @@ export const RPC_URL_FALLBACK = process.env.NEAR_RPC_URL_FALLBACK ?? 'https://rp
 export const EXPLORER_BASE = 'https://testnet.nearblocks.io';
 export const provider = new FailoverRpcProvider([new JsonRpcProvider({ url: RPC_URL }), new JsonRpcProvider({ url: RPC_URL_FALLBACK })]);
 
-export const VAULT_ID = requireEnv('VAULT_CONTRACT_ID');
-export const OWNER_ID = requireEnv('OWNER_ACCOUNT_ID');
-export const AGENT_ID = requireEnv('AGENT_ACCOUNT_ID');
+// Not requireEnv() here: a serverless build's page-data collection step
+// imports this module without secrets present, and must not throw just from
+// doing so. assertCoreEnv() below does the real check at request time.
+export const VAULT_ID = process.env.VAULT_CONTRACT_ID ?? '';
+export const OWNER_ID = process.env.OWNER_ACCOUNT_ID ?? '';
+export const AGENT_ID = process.env.AGENT_ACCOUNT_ID ?? '';
 export const DEMO_OWNER_ID = process.env.DEMO_OWNER_ACCOUNT_ID;
 const DEMO_OWNER_KEY = process.env.DEMO_OWNER_PRIVATE_KEY;
 
@@ -49,6 +52,13 @@ export const BREAK_MANDATE_ID = process.env.BREAK_MANDATE_ID !== undefined ? Num
 // (serverless has no persistent filesystem to hold it). Local dev falls back
 // to the credentials file, same as every other demo account.
 const BREAK_AGENT_KEY = process.env.BREAK_AGENT_PRIVATE_KEY;
+
+/** Called at the top of each route handler — throws with a clear message if the core Vault env vars are missing. */
+export function assertCoreEnv(): void {
+  requireEnv('VAULT_CONTRACT_ID');
+  requireEnv('OWNER_ACCOUNT_ID');
+  requireEnv('AGENT_ACCOUNT_ID');
+}
 
 const VIEW_CACHE_TTL_MS = 5000;
 const viewCache = new Map<string, { value: unknown; expires: number }>();

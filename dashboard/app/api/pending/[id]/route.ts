@@ -1,13 +1,15 @@
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 // A NEAR transaction (approve/reject) can take longer than Vercel's default timeout.
 export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
-import { DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, signerFor, txHash, txValue, view } from '@/lib/near';
+import { assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, signerFor, txHash, txValue, view } from '@/lib/near';
 import type { ActionResult, PendingPayment } from '@/lib/types';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    assertCoreEnv();
     if (!DEMO_OWNER_ID) {
       return NextResponse.json({ error: 'DEMO_OWNER_ACCOUNT_ID is not set. Run `npm run setup-dashboard`.' }, { status: 400 });
     }

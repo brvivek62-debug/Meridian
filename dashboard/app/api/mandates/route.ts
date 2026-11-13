@@ -1,9 +1,10 @@
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 // A NEAR transaction (create_mandate) can take longer than Vercel's default timeout.
 export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
-import { AGENT_ID, DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, nearToYocto, signerFor, txHash, txValue } from '@/lib/near';
+import { AGENT_ID, assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, nearToYocto, signerFor, txHash, txValue } from '@/lib/near';
 
 interface CreateMandateBody {
   agent?: string;
@@ -16,6 +17,7 @@ interface CreateMandateBody {
 
 export async function POST(req: NextRequest) {
   try {
+    assertCoreEnv();
     if (!DEMO_OWNER_ID) {
       return NextResponse.json({ error: 'DEMO_OWNER_ACCOUNT_ID is not set. Run `npm run setup-dashboard`.' }, { status: 400 });
     }

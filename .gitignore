@@ -19,3 +19,5 @@ dashboard/.data/
 
 # OS / editor
 .DS_Store
+.vercel
+.env*

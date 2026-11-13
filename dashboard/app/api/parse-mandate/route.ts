@@ -1,4 +1,5 @@
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 // A NEAR AI JSON-mode call can take longer than Vercel's default timeout.
 export const maxDuration = 30;
 

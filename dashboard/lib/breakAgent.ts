@@ -22,7 +22,14 @@ function requireEnv(name: string): string {
   return v;
 }
 
-const client = new OpenAI({ apiKey: requireEnv('NEARAI_API_KEY'), baseURL: requireEnv('NEARAI_BASE_URL') });
+// Built lazily, on first real request, not at module load — a serverless
+// build's page-data collection step imports this module without secrets
+// present, and must not throw just from doing so.
+let _client: OpenAI | null = null;
+function client(): OpenAI {
+  if (!_client) _client = new OpenAI({ apiKey: requireEnv('NEARAI_API_KEY'), baseURL: requireEnv('NEARAI_BASE_URL') });
+  return _client;
+}
 // Cheapest NEAR AI Cloud model confirmed (live GET /v1/models) to support "tools": openai/gpt-5-nano.
 const MODEL = process.env.BREAK_MODEL || 'openai/gpt-5-nano';
 const MAX_TURNS = 4;
@@ -97,7 +104,7 @@ export async function runBreakAgent(message: string, target: string): Promise<Br
   let vault: BreakRunResult['vault'] = null;
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const completion = await client.chat.completions.create({ model: MODEL, messages, tools: TOOLS });
+    const completion = await client().chat.completions.create({ model: MODEL, messages, tools: TOOLS });
     const msg = completion.choices[0]?.message;
     if (!msg) throw new Error('no message in LLM response');
     messages.push(msg);

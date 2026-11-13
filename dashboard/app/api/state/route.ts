@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { breakStore } from '@/lib/breakStore';
-import { AGENT_ID, DEMO_OWNER_ID, EXPLORER_BASE, OWNER_ID, VAULT_ID, view } from '@/lib/near';
+import { AGENT_ID, assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, OWNER_ID, VAULT_ID, view } from '@/lib/near';
 import type { Bid, DashboardState, DashboardStats, Mandate, MandateWithChildren, OwnerGroup, PendingPayment, Task } from '@/lib/types';
 
 const RECEIPT_PAGE = 50;
@@ -66,6 +66,7 @@ function computeStats(owners: OwnerGroup[], breakBlocked: number, breakStolenYoc
 
 export async function GET() {
   try {
+    assertCoreEnv();
     const allTasks = await loadAllTasks();
     const owners: OwnerGroup[] = [await loadGroup(OWNER_ID, 'production', false, allTasks)];
     if (DEMO_OWNER_ID) owners.push(await loadGroup(DEMO_OWNER_ID, 'demo', true, allTasks));

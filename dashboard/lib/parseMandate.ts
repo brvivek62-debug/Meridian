@@ -20,8 +20,17 @@ function requireEnv(name: string): string {
   return v;
 }
 
-const client = new OpenAI({ apiKey: requireEnv('NEARAI_API_KEY'), baseURL: requireEnv('NEARAI_BASE_URL') });
-const MODEL = process.env.LLM_MODEL || requireEnv('LLM_MODEL');
+// Built lazily, on first real request, not at module load — a serverless
+// build's page-data collection step imports this module without secrets
+// present, and must not throw just from doing so.
+let _client: OpenAI | null = null;
+function client(): OpenAI {
+  if (!_client) _client = new OpenAI({ apiKey: requireEnv('NEARAI_API_KEY'), baseURL: requireEnv('NEARAI_BASE_URL') });
+  return _client;
+}
+function model(): string {
+  return process.env.LLM_MODEL || requireEnv('LLM_MODEL');
+}
 
 export interface ParsedMandate {
   budgetNear: string;
@@ -51,8 +60,8 @@ function isStringArray(v: unknown): v is string[] {
 }
 
 export async function parseMandateDescription(description: string): Promise<ParsedMandate> {
-  const completion = await client.chat.completions.create({
-    model: MODEL,
+  const completion = await client().chat.completions.create({
+    model: model(),
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: description },
