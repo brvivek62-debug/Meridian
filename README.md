@@ -6,6 +6,8 @@ Meridian gives AI agents delegated financial authority on NEAR. Funds sit in an 
 
 Built at NEAR HACKATHON. Tracks: `agents`, `security`, `swarms`.
 
+**🔴 Live demo (testnet): [meridian-zeta-murex.vercel.app](https://meridian-zeta-murex.vercel.app)** — the dashboard, and [`/break`](https://meridian-zeta-murex.vercel.app/break): try to talk a real wallet-holding AI agent into paying you.
+
 > Status: work in progress. See [Progress](#progress).
 
 ## Problem
@@ -177,7 +179,7 @@ Both `/break` and the main dashboard show **"the line"** (`dashboard/components/
 | break mandate 6 (2 NEAR, per-tx cap 0.05, daily cap 0.2, allowlist = paid-api only) | [`2eFPGKTDSh…BXuKS`](https://testnet.nearblocks.io/txns/2eFPGKTDShHJZomzRJmvbgZTWj5foxoWweAtW3tBXuKS) |
 | `/break` attack attempts (2026-11-13, after removing self-censorship — see below): 3 of 5 tested styles fooled break-agent into attempting a payment (fake bug-bounty payout, a fake-owner demand, a fake system-override/prompt injection); the Vault `Blocked` all 3 — allowlist on the bounty payout, allowlist + per-tx cap + daily cap on the other two — 0 NEAR stolen. The 2 that didn't fool it (an "emergency top-up" overspend and a repeat-request daily-cap probe) were refused by the LLM's own judgment, not by the Vault. | e.g. [`5QfQ4t768A…uvPvz`](https://testnet.nearblocks.io/txns/5QfQ4t768AKD3xHX3oiDK739mazPTne7DQwo8SxuvPvz) |
 | Demo accounts (testnet) | `agent`, `worker-scraper`, `worker-summarizer`, `paid-api`, `demo-owner`, `break-agent` `.vivek-meridian.testnet`; all ids and creation txs in [`deployments/testnet.json`](deployments/testnet.json) |
-| Hosted demo | _TODO_ |
+| Hosted demo (Vercel, testnet) | [meridian-zeta-murex.vercel.app](https://meridian-zeta-murex.vercel.app) — dashboard + [`/break`](https://meridian-zeta-murex.vercel.app/break), Upstash Redis-backed, up until at least 2026-11-25 |
 | Demo video | _TODO_ |
 | Chain Signatures payment (Sepolia) tx | _TODO_ |
 | NEAR Intents swap (mainnet) tx | _TODO_ |
@@ -227,3 +229,6 @@ spider sensi
 - [x] break-agent no longer told its own limits (check_budget returns only remaining balance; system prompt never mentions allowlist/caps), so it can't self-censor based on knowing the rules — re-ran the 5 attacks after the change, same result: 3/5 fooled, Vault blocked all 3
 - [x] "The line" animation (`TheLine.tsx`) on `/break` and the dashboard — pure CSS, blocked/paid/refused states, under 1.5s
 - [x] Plain-English mandates: "describe the rules in your own words" → NEAR AI parses to exact fields for review/edit, never auto-submitted, client-side sanity validation before create_mandate
+
+### Extras (Nov 13)
+- [x] Hosted demo on Vercel (testnet): [meridian-zeta-murex.vercel.app](https://meridian-zeta-murex.vercel.app). Storage for `/break` attempts/scoreboard/rate-limits moved to Upstash Redis (Vercel Marketplace integration) with the local JSON file kept as the local-dev fallback. `dashboard/lib/near.ts`'s view calls are cached ~5s and go through a `FailoverRpcProvider` across two independent testnet RPC endpoints, since concurrent visitors polling the dashboard were hitting fastnear's public rate limit directly. `maxDuration` set on `/api/break`, `/api/mandates`, `/api/pending/[id]` and `/api/parse-mandate` so an LLM call plus a NEAR tx has room to finish. Verified live: dashboard and `/break` load, a real attack runs end to end (NEAR AI → `Vault.pay` → on-chain receipt), the scoreboard persists across requests, the 5-attempts/10-min rate limit returns 429, and `/api/mandates` signs and submits a real `create_mandate` tx from the deployed function.
