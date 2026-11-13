@@ -5,14 +5,22 @@
  *     (vault, agent, worker-scraper, worker-summarizer, paid-api). The owner
  *     funds them via near-cli-rs, signing with the key in its keychain. Each new
  *     account gets a fresh key, saved only to ~/.near-credentials/testnet/.
- *  2. Deploys contracts/vault/target/near/vault.wasm to vault.<owner> if the
- *     on-chain code differs. The Vault has no init method: its state starts
- *     from `Default` on first use, so there is nothing to initialise.
+ *  2. Deploys contracts/vault/target/near/vault.wasm to vault.<owner>.
+ *     - A brand-new vault account (no code yet) deploys plain: its state
+ *       starts from `Default` on first use, so there is nothing to initialise.
+ *     - An existing vault being *upgraded* (code differs and it already has
+ *       on-chain state) deploys together with a `migrate` init call in the
+ *       SAME transaction, so the old-shaped bytes are never left readable by
+ *       the new code in between. See contracts/vault/src/lib.rs's migration
+ *       section and tests/sandbox.rs's upgrade test for why this is safe.
  *  3. Records account ids and tx hashes in deployments/testnet.json (public data only).
  *
  * Usage: (cd contracts/vault && cargo near build non-reproducible-wasm) && npm run deploy
  */
-import { KeyPair, nearToYocto } from 'near-api-js';
+import { actions, KeyPair, nearToYocto, teraToGas } from 'near-api-js';
+
+/** NEAR's codeHash for an account with no contract deployed (sha256 of zero bytes, base58). */
+const NO_CODE_HASH = '11111111111111111111111111111111';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -73,7 +81,9 @@ async function main() {
   const d = readDeployments();
   d.network = 'testnet';
   d.owner = OWNER_ID;
-  d.accounts = Object.fromEntries(roles.map((r) => [r, accountId(r)]));
+  // Merge, don't replace: other setup scripts (e.g. setup-dashboard.ts) add
+  // their own accounts here (demoOwner, etc.) that aren't part of SUB_ACCOUNTS.
+  d.accounts = { ...d.accounts, ...Object.fromEntries(roles.map((r) => [r, accountId(r)])) };
   d.createTxs ??= {};
   for (const role of roles) await ensureAccount(role, d);
 
@@ -82,12 +92,24 @@ async function main() {
   const onChain = (await readonlyAccount(vaultId).getState()).codeHash;
   if (onChain === localHash) {
     console.log(`✓ ${vaultId} already runs this wasm (${localHash})`);
-  } else {
+  } else if (onChain === NO_CODE_HASH) {
+    // Fresh account: state starts from Default on first use, nothing to migrate.
     const res = await account(vaultId).deployContract(new Uint8Array(wasm));
     const hash = txHash(res);
     d.vault = { contractId: vaultId, codeHash: localHash, deployTx: hash, deployedAt: new Date().toISOString() };
     writeDeployments(d);
     console.log(`+ deployed vault.wasm (${wasm.length} bytes, code hash ${localHash}) to ${vaultId}  ${explorerTx(hash)}`);
+  } else {
+    // Upgrading existing live state: deploy + `migrate` as one atomic transaction.
+    console.log(`! ${vaultId} runs ${onChain}, upgrading to ${localHash} with a migrate() init call...`);
+    const res = await account(vaultId).signAndSendTransaction({
+      receiverId: vaultId,
+      actions: [actions.deployContract(new Uint8Array(wasm)), actions.functionCall('migrate', {}, teraToGas('100'), 0n)],
+    });
+    const hash = txHash(res);
+    d.vault = { contractId: vaultId, codeHash: localHash, deployTx: hash, migratedFrom: onChain, deployedAt: new Date().toISOString() };
+    writeDeployments(d);
+    console.log(`+ upgraded ${vaultId} to vault.wasm (${wasm.length} bytes, code hash ${localHash}) and ran migrate()  ${explorerTx(hash)}`);
   }
 
   // Smoke check: views work and the account has room for more storage.

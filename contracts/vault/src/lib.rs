@@ -37,6 +37,9 @@ pub const MAX_CHILDREN: usize = 5;
 pub const MAX_DEPTH: u8 = 2;
 pub const MAX_PENDING_PER_OWNER: usize = 50;
 pub const MAX_BIDS_PER_TASK: usize = 20;
+/// Bounds for `authorize_foreign_payment` / `set_foreign_policy` (S1, Chain Signatures).
+pub const MAX_CHAIN_LEN: usize = 32;
+pub const MAX_FOREIGN_ADDR_LEN: usize = 128;
 /// Gas reserved for the `on_transfer_complete` callback.
 const GAS_FOR_CALLBACK: Gas = Gas::from_tgas(10);
 const ZERO: NearToken = NearToken::from_yoctonear(0);
@@ -52,6 +55,13 @@ enum StorageKey {
     OwnerPending,
     Tasks,
     Bids,
+    // Added for S1 (Chain Signatures foreign payments). New prefixes only — the
+    // variants above keep their original discriminants, so existing collections
+    // (and the bytes already stored under their prefixes) are untouched.
+    ForeignPolicies,
+    ForeignReceipts,
+    MandateForeignReceipts,
+    ForeignReceiptCounts,
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +301,105 @@ pub struct RevokeResult {
 }
 
 // ---------------------------------------------------------------------------
+// Foreign payments (S1 — Chain Signatures). The destination chain's own token
+// is not NEAR, so these caps are denominated in USD cents, not `NearToken`.
+// Unlike `Mandate.allowlist` (empty = any vendor), an empty foreign allowlist
+// means *no* foreign address is allowed — the safer default for a brand-new,
+// off-chain-signed capability. See the README's trust-model section.
+// ---------------------------------------------------------------------------
+
+#[near(serializers = [json, borsh])]
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct ForeignPolicy {
+    /// Lowercased foreign addresses the mandate's agent may pay. Empty = none allowed.
+    pub allowlist: Vec<String>,
+    pub per_tx_cap_usd_cents: u64,
+    pub daily_cap_usd_cents: u64,
+    /// Total allowance for foreign payments from this mandate.
+    pub budget_usd_cents: u64,
+    pub spent_usd_cents: u64,
+    pub spent_today_usd_cents: u64,
+    pub day_start_ns: U64,
+}
+
+impl ForeignPolicy {
+    fn remaining_usd_cents(&self) -> u64 {
+        self.budget_usd_cents.saturating_sub(self.spent_usd_cents)
+    }
+
+    fn roll_day(&mut self, now_ns: u64) {
+        if now_ns.saturating_sub(self.day_start_ns.0) >= DAY_NS {
+            self.day_start_ns = U64(now_ns);
+            self.spent_today_usd_cents = 0;
+        }
+    }
+
+    /// Every policy rule a foreign payment must pass, mirroring `Mandate::violations`.
+    fn violations(&self, to: &str, amount_usd_cents: u64) -> Vec<String> {
+        let mut v = Vec::new();
+        if amount_usd_cents == 0 {
+            v.push("amount must be greater than 0".to_string());
+        }
+        if !self.allowlist.contains(&to.to_lowercase()) {
+            v.push(format!("foreign address {to} is not on the allowlist"));
+        }
+        if amount_usd_cents > self.per_tx_cap_usd_cents {
+            v.push(format!(
+                "amount {amount_usd_cents} USD-cents exceeds per-tx cap {} USD-cents",
+                self.per_tx_cap_usd_cents
+            ));
+        }
+        if amount_usd_cents > self.remaining_usd_cents() {
+            v.push(format!(
+                "amount {amount_usd_cents} USD-cents exceeds remaining foreign budget {} USD-cents",
+                self.remaining_usd_cents()
+            ));
+        }
+        if self.spent_today_usd_cents.saturating_add(amount_usd_cents) > self.daily_cap_usd_cents {
+            v.push(format!(
+                "amount {amount_usd_cents} USD-cents would exceed daily cap {} USD-cents (spent today {})",
+                self.daily_cap_usd_cents, self.spent_today_usd_cents
+            ));
+        }
+        v
+    }
+}
+
+#[near(serializers = [json, borsh])]
+#[derive(Clone, Debug, PartialEq)]
+pub enum ForeignReceiptStatus {
+    /// Policy checks passed; the agent may now request the Chain Signatures
+    /// MPC signature and broadcast on the foreign chain.
+    Authorized,
+    /// Policy violation; the agent must not request a signature.
+    Blocked,
+}
+
+#[near(serializers = [json, borsh])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignReceipt {
+    pub id: u64,
+    pub mandate_id: u64,
+    /// e.g. "ethereum-sepolia".
+    pub chain: String,
+    /// Foreign-chain address, as given (not lowercased).
+    pub to: String,
+    pub amount_usd_cents: u64,
+    pub memo: String,
+    pub status: ForeignReceiptStatus,
+    pub reason: Option<String>,
+    pub ts_ns: U64,
+}
+
+#[near(serializers = [json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ForeignAuthResult {
+    pub status: ForeignReceiptStatus,
+    pub receipt_id: u64,
+    pub reason: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Contract
 // ---------------------------------------------------------------------------
 
@@ -309,6 +418,14 @@ pub struct Vault {
     owner_pending: LookupMap<AccountId, Vec<u64>>,
     tasks: LookupMap<u64, Task>,
     bids: LookupMap<u64, Vec<Bid>>,
+    // --- added for S1; see `migrate` ---
+    next_foreign_receipt_id: u64,
+    /// One policy per mandate. Absent = nothing authorized (every cap is 0).
+    foreign_policies: LookupMap<u64, ForeignPolicy>,
+    foreign_receipts: LookupMap<u64, ForeignReceipt>,
+    /// (mandate_id, index within mandate) -> foreign receipt id
+    mandate_foreign_receipts: LookupMap<(u64, u32), u64>,
+    foreign_receipt_counts: LookupMap<u64, u32>,
 }
 
 impl Default for Vault {
@@ -326,6 +443,11 @@ impl Default for Vault {
             owner_pending: LookupMap::new(StorageKey::OwnerPending),
             tasks: LookupMap::new(StorageKey::Tasks),
             bids: LookupMap::new(StorageKey::Bids),
+            next_foreign_receipt_id: 0,
+            foreign_policies: LookupMap::new(StorageKey::ForeignPolicies),
+            foreign_receipts: LookupMap::new(StorageKey::ForeignReceipts),
+            mandate_foreign_receipts: LookupMap::new(StorageKey::MandateForeignReceipts),
+            foreign_receipt_counts: LookupMap::new(StorageKey::ForeignReceiptCounts),
         }
     }
 }
@@ -873,6 +995,105 @@ impl Vault {
     pub fn get_bids(&self, task_id: u64) -> Vec<Bid> {
         self.bids.get(&task_id).cloned().unwrap_or_default()
     }
+
+    // ----- foreign payments (S1 — Chain Signatures) -----
+
+    /// Owner only. Set (or replace) the foreign-payment policy for a mandate:
+    /// which foreign addresses its agent may pay, and the per-tx/daily/total
+    /// caps on those payments in USD cents. Until this is called, every cap is
+    /// 0 and `authorize_foreign_payment` blocks everything. Spend-to-date is
+    /// preserved across an update (only the limits and allowlist change).
+    pub fn set_foreign_policy(
+        &mut self,
+        mandate_id: u64,
+        allowlist: Vec<String>,
+        per_tx_cap_usd_cents: u64,
+        daily_cap_usd_cents: u64,
+        budget_usd_cents: u64,
+    ) {
+        let mandate = self.mandate(mandate_id);
+        require!(
+            env::predecessor_account_id() == mandate.owner,
+            "only the mandate owner can set the foreign payment policy"
+        );
+        require!(allowlist.len() <= MAX_ALLOWLIST, "allowlist too long");
+        require!(
+            allowlist.iter().all(|a| !a.is_empty() && a.len() <= MAX_FOREIGN_ADDR_LEN),
+            "foreign address too long"
+        );
+        let mut allowlist: Vec<String> = allowlist.iter().map(|a| a.to_lowercase()).collect();
+        allowlist.sort();
+        allowlist.dedup();
+
+        let mut policy = self.foreign_policies.get(&mandate_id).cloned().unwrap_or_default();
+        policy.allowlist = allowlist;
+        policy.per_tx_cap_usd_cents = per_tx_cap_usd_cents;
+        policy.daily_cap_usd_cents = daily_cap_usd_cents;
+        policy.budget_usd_cents = budget_usd_cents;
+        emit_event("foreign_policy_set", json!([{ "mandate_id": mandate_id, "policy": policy }]));
+        self.foreign_policies.insert(mandate_id, policy);
+    }
+
+    /// Run the mandate's foreign-payment policy checks (foreign-address
+    /// allowlist, per-tx/daily/budget caps in USD cents) and log a
+    /// `ForeignReceipt` — Authorized or Blocked — same as `pay` logs a
+    /// `Blocked` receipt on a policy violation. This runs *before* the agent
+    /// asks the Chain Signatures MPC signer for a signature: the signature
+    /// request and broadcast happen off-chain afterwards, and only if this
+    /// returns `Authorized` (see the README's trust-model section). Callable
+    /// only by the mandate's agent.
+    pub fn authorize_foreign_payment(
+        &mut self,
+        mandate_id: u64,
+        chain: String,
+        to: String,
+        amount_usd_cents: u64,
+        memo: String,
+    ) -> ForeignAuthResult {
+        let mandate = self.mandate(mandate_id);
+        require!(
+            env::predecessor_account_id() == mandate.agent,
+            "only the mandate's agent can authorize a foreign payment"
+        );
+        require!(memo.len() <= MAX_MEMO_LEN, "memo too long");
+        require!(!chain.is_empty() && chain.len() <= MAX_CHAIN_LEN, "invalid chain name");
+        require!(!to.is_empty() && to.len() <= MAX_FOREIGN_ADDR_LEN, "foreign address too long");
+
+        let mut policy = self.foreign_policies.get(&mandate_id).cloned().unwrap_or_default();
+        policy.roll_day(env::block_timestamp());
+        let mut violations = policy.violations(&to, amount_usd_cents);
+        if !mandate.active {
+            violations.push("mandate is not active".to_string());
+        }
+
+        let status = if violations.is_empty() { ForeignReceiptStatus::Authorized } else { ForeignReceiptStatus::Blocked };
+        if violations.is_empty() {
+            policy.spent_usd_cents = policy.spent_usd_cents.saturating_add(amount_usd_cents);
+            policy.spent_today_usd_cents = policy.spent_today_usd_cents.saturating_add(amount_usd_cents);
+        }
+        self.foreign_policies.insert(mandate_id, policy);
+
+        let reason = if violations.is_empty() { None } else { Some(violations.join("; ")) };
+        let receipt_id =
+            self.record_foreign_receipt(mandate_id, chain, to, amount_usd_cents, memo, status.clone(), reason.clone());
+        ForeignAuthResult { status, receipt_id, reason }
+    }
+
+    pub fn get_foreign_policy(&self, mandate_id: u64) -> Option<ForeignPolicy> {
+        self.foreign_policies.get(&mandate_id).cloned()
+    }
+
+    /// Foreign receipts of one mandate, oldest first (mirrors `get_receipts`).
+    pub fn get_foreign_receipts(&self, mandate_id: u64, from: Option<u32>, limit: Option<u32>) -> Vec<ForeignReceipt> {
+        let count = self.foreign_receipt_counts.get(&mandate_id).copied().unwrap_or(0);
+        let from = from.unwrap_or(0);
+        let limit = limit.unwrap_or(MAX_PAGE).min(MAX_PAGE);
+        let end = from.saturating_add(limit).min(count);
+        (from..end)
+            .filter_map(|i| self.mandate_foreign_receipts.get(&(mandate_id, i)))
+            .filter_map(|rid| self.foreign_receipts.get(rid).cloned())
+            .collect()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1064,6 +1285,99 @@ impl Vault {
         self.mandate_receipts.insert((mandate.id, mandate.receipt_count), id);
         mandate.receipt_count += 1;
         id
+    }
+
+    /// Store a foreign receipt, index it under its mandate, and emit it as a
+    /// NEP-297 event. Mirrors `record_receipt`, but the per-mandate count lives
+    /// in `foreign_receipt_counts` since `Mandate.receipt_count` is not reused
+    /// (changing that struct's layout would break deserialization of existing
+    /// mandates already stored on-chain).
+    #[allow(clippy::too_many_arguments)]
+    fn record_foreign_receipt(
+        &mut self,
+        mandate_id: u64,
+        chain: String,
+        to: String,
+        amount_usd_cents: u64,
+        memo: String,
+        status: ForeignReceiptStatus,
+        reason: Option<String>,
+    ) -> u64 {
+        let id = self.next_foreign_receipt_id;
+        self.next_foreign_receipt_id += 1;
+        let receipt = ForeignReceipt { id, mandate_id, chain, to, amount_usd_cents, memo, status, reason, ts_ns: U64(env::block_timestamp()) };
+        let event_name = match receipt.status {
+            ForeignReceiptStatus::Authorized => "foreign_authorized",
+            ForeignReceiptStatus::Blocked => "foreign_blocked",
+        };
+        emit_event(event_name, json!([receipt]));
+        self.foreign_receipts.insert(id, receipt);
+        let idx = self.foreign_receipt_counts.get(&mandate_id).copied().unwrap_or(0);
+        self.mandate_foreign_receipts.insert((mandate_id, idx), id);
+        self.foreign_receipt_counts.insert(mandate_id, idx + 1);
+        id
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Upgrade migration (S1). The already-deployed Vault's on-chain state has no
+// foreign-payment fields; deserializing it straight into the current `Vault`
+// struct would fail. `migrate` reads the old bytes as `VaultV1` (the exact
+// pre-S1 field set) and re-wraps them into the current struct, adding the new
+// collections under their own fresh storage prefixes. The `LookupMap` fields
+// are moved, not copied: they only carry a storage-key prefix, so every
+// mandate, receipt, pending payment, task and bid already on chain stays
+// exactly where it is — nothing is read or rewritten.
+//
+// Deploy flow: `near contract deploy <id> use-file vault.wasm without-init-call
+// ...` then a separate `near contract call-function as-transaction <id> migrate
+// json-args {} ... sign-as <id> ...` (the contract calling itself satisfies
+// `#[private]`). `tests/sandbox.rs::upgrade_preserves_old_state_and_adds_foreign_payments`
+// exercises this exact sequence against `tests/fixtures/vault_v1_live.wasm`,
+// the wasm that was actually live on testnet before this change.
+// ---------------------------------------------------------------------------
+
+#[near(serializers = [borsh])]
+struct VaultV1 {
+    next_mandate_id: u64,
+    next_receipt_id: u64,
+    next_pending_id: u64,
+    next_task_id: u64,
+    mandates: LookupMap<u64, Mandate>,
+    owner_mandates: LookupMap<AccountId, Vec<u64>>,
+    receipts: LookupMap<u64, Receipt>,
+    mandate_receipts: LookupMap<(u64, u32), u64>,
+    pending: LookupMap<u64, PendingPayment>,
+    owner_pending: LookupMap<AccountId, Vec<u64>>,
+    tasks: LookupMap<u64, Task>,
+    bids: LookupMap<u64, Vec<Bid>>,
+}
+
+#[near]
+impl Vault {
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate() -> Self {
+        let old: VaultV1 = env::state_read().unwrap_or_else(|| env::panic_str("failed to read pre-S1 state"));
+        Self {
+            next_mandate_id: old.next_mandate_id,
+            next_receipt_id: old.next_receipt_id,
+            next_pending_id: old.next_pending_id,
+            next_task_id: old.next_task_id,
+            mandates: old.mandates,
+            owner_mandates: old.owner_mandates,
+            receipts: old.receipts,
+            mandate_receipts: old.mandate_receipts,
+            pending: old.pending,
+            owner_pending: old.owner_pending,
+            tasks: old.tasks,
+            bids: old.bids,
+            next_foreign_receipt_id: 0,
+            foreign_policies: LookupMap::new(StorageKey::ForeignPolicies),
+            foreign_receipts: LookupMap::new(StorageKey::ForeignReceipts),
+            mandate_foreign_receipts: LookupMap::new(StorageKey::MandateForeignReceipts),
+            foreign_receipt_counts: LookupMap::new(StorageKey::ForeignReceiptCounts),
+        }
     }
 }
 

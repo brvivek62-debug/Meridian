@@ -589,3 +589,126 @@ fn agent_cannot_settle_escrow_after_revoke() {
     as_(AGENT);
     let _ = v.release(t);
 }
+
+// ---------------------------------------------------------------- S1: foreign payments
+
+const SEPOLIA_VENDOR: &str = "0x000000000000000000000000000000000000aa";
+const SEPOLIA_ATTACKER: &str = "0x000000000000000000000000000000000000ee";
+
+/// Owner sets a foreign policy: 500 USD cents/tx, 1000/day, 2000 total,
+/// allowlist = SEPOLIA_VENDOR only.
+fn with_foreign_policy(v: &mut Vault, id: u64) {
+    as_(OWNER);
+    v.set_foreign_policy(id, vec![SEPOLIA_VENDOR.to_string()], 500, 1000, 2000);
+}
+
+#[test]
+fn authorize_foreign_payment_with_no_policy_is_blocked() {
+    let (mut v, id) = setup();
+    as_(AGENT);
+    let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 100, "".into());
+    assert_eq!(r.status, ForeignReceiptStatus::Blocked);
+    assert!(r.reason.unwrap().contains("not on the allowlist"));
+    assert_eq!(v.get_foreign_receipts(id, None, None).len(), 1);
+}
+
+#[test]
+fn authorize_foreign_payment_within_policy_is_authorized() {
+    let (mut v, id) = setup();
+    with_foreign_policy(&mut v, id);
+    as_(AGENT);
+    let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 300, "demo payment".into());
+    assert_eq!(r.status, ForeignReceiptStatus::Authorized);
+    assert!(r.reason.is_none());
+    let policy = v.get_foreign_policy(id).unwrap();
+    assert_eq!((policy.spent_usd_cents, policy.spent_today_usd_cents), (300, 300));
+    let receipts = v.get_foreign_receipts(id, None, None);
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts[0].status, ForeignReceiptStatus::Authorized);
+    assert_eq!(receipts[0].chain, "ethereum-sepolia");
+}
+
+#[test]
+fn authorize_foreign_payment_rejects_non_allowlisted_address() {
+    let (mut v, id) = setup();
+    with_foreign_policy(&mut v, id);
+    as_(AGENT);
+    let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_ATTACKER.into(), 100, "".into());
+    assert_eq!(r.status, ForeignReceiptStatus::Blocked);
+    assert!(r.reason.as_deref().unwrap().contains("not on the allowlist"));
+    // Blocked attempts cost nothing.
+    assert_eq!(v.get_foreign_policy(id).unwrap().spent_usd_cents, 0);
+}
+
+#[test]
+fn authorize_foreign_payment_enforces_per_tx_and_budget_caps() {
+    let (mut v, id) = setup();
+    as_(OWNER);
+    // per-tx 500, daily cap high enough that only the total budget binds.
+    v.set_foreign_policy(id, vec![SEPOLIA_VENDOR.to_string()], 500, 2000, 2000);
+    as_(AGENT);
+    // Over the per-tx cap.
+    let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 600, "".into());
+    assert_eq!(r.status, ForeignReceiptStatus::Blocked);
+    assert!(r.reason.as_deref().unwrap().contains("per-tx cap"));
+
+    // Spend down the total budget across multiple authorized payments.
+    for _ in 0..4 {
+        let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 500, "".into());
+        assert_eq!(r.status, ForeignReceiptStatus::Authorized, "{r:?}");
+    }
+    // 4 * 500 = 2000 == budget; one more is over budget.
+    let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 1, "".into());
+    assert_eq!(r.status, ForeignReceiptStatus::Blocked);
+    assert!(r.reason.as_deref().unwrap().contains("remaining foreign budget"));
+}
+
+#[test]
+fn authorize_foreign_payment_daily_cap_rolls_over() {
+    let (mut v, id) = setup();
+    as_(OWNER);
+    v.set_foreign_policy(id, vec![SEPOLIA_VENDOR.to_string()], 500, 500, 10_000);
+    ctx(AGENT, ZERO, 1_000);
+    assert_eq!(
+        v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 500, "".into()).status,
+        ForeignReceiptStatus::Authorized
+    );
+    // Same day: daily cap (500) already spent.
+    let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 100, "".into());
+    assert_eq!(r.status, ForeignReceiptStatus::Blocked);
+    assert!(r.reason.as_deref().unwrap().contains("daily cap"));
+    // 24h later: the window resets.
+    ctx(AGENT, ZERO, 1_000 + DAY_NS);
+    let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 500, "".into());
+    assert_eq!(r.status, ForeignReceiptStatus::Authorized, "{r:?}");
+    assert_eq!(v.get_foreign_policy(id).unwrap().spent_usd_cents, 1000);
+}
+
+#[test]
+#[should_panic(expected = "only the mandate's agent")]
+fn only_agent_can_authorize_foreign_payment() {
+    let (mut v, id) = setup();
+    with_foreign_policy(&mut v, id);
+    as_(ATTACKER);
+    let _ = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 100, "".into());
+}
+
+#[test]
+#[should_panic(expected = "only the mandate owner")]
+fn only_owner_can_set_foreign_policy() {
+    let (mut v, id) = setup();
+    as_(AGENT);
+    v.set_foreign_policy(id, vec![SEPOLIA_VENDOR.to_string()], 500, 1000, 2000);
+}
+
+#[test]
+fn revoked_mandate_blocks_foreign_payments() {
+    let (mut v, id) = setup();
+    with_foreign_policy(&mut v, id);
+    as_(OWNER);
+    v.revoke(id);
+    as_(AGENT);
+    let r = v.authorize_foreign_payment(id, "ethereum-sepolia".into(), SEPOLIA_VENDOR.into(), 100, "".into());
+    assert_eq!(r.status, ForeignReceiptStatus::Blocked);
+    assert!(r.reason.as_deref().unwrap().contains("not active"));
+}

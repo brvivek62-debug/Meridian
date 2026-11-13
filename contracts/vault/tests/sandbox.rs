@@ -418,3 +418,207 @@ async fn revoke_refunds_owner_and_disables_children() -> R<()> {
     assert_eq!(env.pay(id, &env.api, m(100)).await?.status, "Blocked");
     Ok(())
 }
+
+// ------------------------------------------------------------------ S1: foreign payments
+
+const SEPOLIA_VENDOR: &str = "0x000000000000000000000000000000000000aa";
+
+#[derive(Deserialize, Debug, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+struct ForeignAuthResult {
+    status: String,
+    reason: Option<String>,
+}
+
+impl Env {
+    async fn set_foreign_policy(&self, mandate_id: u64, allowlist: Vec<&str>, per_tx_cents: u64, daily_cents: u64, budget_cents: u64) -> R<()> {
+        self.call(
+            &self.owner,
+            "set_foreign_policy",
+            json!({
+                "mandate_id": mandate_id,
+                "allowlist": allowlist,
+                "per_tx_cap_usd_cents": per_tx_cents,
+                "daily_cap_usd_cents": daily_cents,
+                "budget_usd_cents": budget_cents,
+            }),
+            NearToken::from_yoctonear(0),
+        )
+        .await?
+        .assert_success();
+        Ok(())
+    }
+
+    async fn authorize_foreign(&self, mandate_id: u64, to: &str, amount_cents: u64) -> R<ForeignAuthResult> {
+        self.ok(
+            &self.agent,
+            "authorize_foreign_payment",
+            json!({ "mandate_id": mandate_id, "chain": "ethereum-sepolia", "to": to, "amount_usd_cents": amount_cents, "memo": "demo" }),
+        )
+        .await
+    }
+}
+
+#[tokio::test]
+async fn foreign_payment_authorized_then_blocked_for_non_allowlisted() -> R<()> {
+    let env = setup().await?;
+    let id = env.create_mandate(n(5)).await?;
+
+    // No policy set yet -> every cap is 0 -> blocked.
+    let r = env.authorize_foreign(id, SEPOLIA_VENDOR, 100).await?;
+    assert_eq!(r.status, "Blocked");
+    assert!(r.reason.as_deref().unwrap().contains("not on the allowlist"));
+
+    // Owner authorizes SEPOLIA_VENDOR up to 500 cents/tx, 1000/day, 2000 total.
+    env.set_foreign_policy(id, vec![SEPOLIA_VENDOR], 500, 1000, 2000).await?;
+
+    let r = env.authorize_foreign(id, SEPOLIA_VENDOR, 300).await?;
+    assert_eq!(r.status, "Authorized", "{r:?}");
+    let policy: Value = env.view("get_foreign_policy", json!({ "mandate_id": id })).await?;
+    assert_eq!(policy["spent_usd_cents"], 300);
+
+    // A different foreign address (e.g. the attack button's target) is blocked,
+    // even though the mandate itself is funded.
+    let attacker_addr = "0x000000000000000000000000000000000000ee";
+    let r = env.authorize_foreign(id, attacker_addr, 100).await?;
+    assert_eq!(r.status, "Blocked");
+    assert!(r.reason.as_deref().unwrap().contains("not on the allowlist"));
+
+    let receipts: Vec<Value> = env.view("get_foreign_receipts", json!({ "mandate_id": id })).await?;
+    assert_eq!(receipts.len(), 3);
+    assert_eq!(
+        receipts.iter().map(|r| r["status"].as_str().unwrap()).collect::<Vec<_>>(),
+        vec!["Blocked", "Authorized", "Blocked"]
+    );
+    Ok(())
+}
+
+// ------------------------------------------------------------------ S1: upgrade safety
+//
+// The Vault is already deployed with live state (see deployments/testnet.json).
+// This proves the `migrate` upgrade path works against that exact pre-S1 wasm:
+// old mandates/receipts survive untouched, and the new foreign-payment methods
+// work immediately after.
+
+#[tokio::test]
+async fn upgrade_preserves_old_state_and_adds_foreign_payments() -> R<()> {
+    let old_wasm = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/vault_v1_live.wasm"))?;
+    let new_wasm_path = cargo_near_build::build_with_cli(Default::default())?;
+    let new_wasm = std::fs::read(new_wasm_path)?;
+
+    let sandbox = near_sandbox::Sandbox::start_sandbox().await?;
+    let net = NetworkConfig::from_rpc_url("sandbox", sandbox.rpc_addr.parse()?);
+    let signer = Signer::from_secret_key(near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY.parse()?)?;
+    let vault = create_account(&sandbox, "vault.sandbox").await?;
+    let owner = create_account(&sandbox, "owner.sandbox").await?;
+    let agent = create_account(&sandbox, "agent.sandbox").await?;
+    let api = create_account(&sandbox, "api.sandbox").await?;
+
+    // Deploy the exact wasm that is live on testnet today, with no migrate call
+    // (it predates `migrate` entirely), and build up real pre-upgrade state.
+    near_api::Contract::deploy(vault.clone())
+        .use_code(old_wasm)
+        .without_init_call()
+        .with_signer(signer.clone())
+        .send_to(&net)
+        .await?
+        .assert_success();
+
+    async fn call(net: &NetworkConfig, signer: Arc<Signer>, vault: AccountId, who: AccountId, method: &str, args: Value, deposit: NearToken) -> R<TransactionResult> {
+        Ok(near_api::Contract(vault)
+            .call_function(method, args)
+            .transaction()
+            .deposit(deposit)
+            .gas(NearGas::from_tgas(100))
+            .with_signer(who, signer)
+            .send_to(net)
+            .await?)
+    }
+
+    call(
+        &net,
+        signer.clone(),
+        vault.clone(),
+        owner.clone(),
+        "create_mandate",
+        json!({ "agent": agent, "per_tx_cap": n(1), "daily_cap": n(2), "allowlist": [api.clone()], "approval_threshold": m(800) }),
+        n(5),
+    )
+    .await?
+    .assert_success();
+    call(
+        &net,
+        signer.clone(),
+        vault.clone(),
+        agent.clone(),
+        "pay",
+        json!({ "mandate_id": 0, "to": api, "amount": m(300), "memo": "pre-upgrade" }),
+        NearToken::from_yoctonear(0),
+    )
+    .await?
+    .assert_success();
+
+    async fn view<T: DeserializeOwned + Send + Sync + 'static>(net: &NetworkConfig, vault: AccountId, method: &str, args: Value) -> R<T> {
+        Ok(near_api::Contract(vault).call_function(method, args).read_only().fetch_from(net).await?.data)
+    }
+
+    let mandate_before: Value = view(&net, vault.clone(), "get_mandate", json!({ "mandate_id": 0 })).await?;
+    assert_eq!(mandate_before["spent"], m(300).as_yoctonear().to_string());
+    assert_eq!(mandate_before["receipt_count"], 1);
+
+    // Upgrade: deploy the current wasm and run `migrate` in the same transaction,
+    // exactly as scripts/deploy.ts will do against the real testnet vault.
+    near_api::Contract::deploy(vault.clone())
+        .use_code(new_wasm.clone())
+        .with_init_call("migrate", json!({}))?
+        .max_gas()
+        .with_signer(signer.clone())
+        .send_to(&net)
+        .await?
+        .assert_success();
+
+    // Old state is untouched.
+    let mandate_after: Value = view(&net, vault.clone(), "get_mandate", json!({ "mandate_id": 0 })).await?;
+    assert_eq!(mandate_after, mandate_before);
+    let receipts: Vec<Value> = view(&net, vault.clone(), "get_receipts", json!({ "mandate_id": 0 })).await?;
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts[0]["kind"], "Payment");
+
+    // New S1 methods work right away.
+    call(
+        &net,
+        signer.clone(),
+        vault.clone(),
+        owner.clone(),
+        "set_foreign_policy",
+        json!({ "mandate_id": 0, "allowlist": [SEPOLIA_VENDOR], "per_tx_cap_usd_cents": 500, "daily_cap_usd_cents": 1000, "budget_usd_cents": 2000 }),
+        NearToken::from_yoctonear(0),
+    )
+    .await?
+    .assert_success();
+    let r = call(
+        &net,
+        signer.clone(),
+        vault.clone(),
+        agent.clone(),
+        "authorize_foreign_payment",
+        json!({ "mandate_id": 0, "chain": "ethereum-sepolia", "to": SEPOLIA_VENDOR, "amount_usd_cents": 300, "memo": "post-upgrade" }),
+        NearToken::from_yoctonear(0),
+    )
+    .await?
+    .assert_success();
+    let parsed: ForeignAuthResult = r.json()?;
+    assert_eq!(parsed.status, "Authorized", "{parsed:?}");
+
+    // Re-running migrate a second time must fail: the bytes on chain are no
+    // longer VaultV1-shaped, and only the contract itself could call it anyway.
+    near_api::Contract::deploy(vault.clone())
+        .use_code(new_wasm)
+        .with_init_call("migrate", json!({}))?
+        .max_gas()
+        .with_signer(signer)
+        .send_to(&net)
+        .await?
+        .assert_failure();
+    Ok(())
+}

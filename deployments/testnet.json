@@ -19,9 +19,10 @@
   },
   "vault": {
     "contractId": "vault.vivek-meridian.testnet",
-    "codeHash": "42ZeciXtgZtd2UKKi88WMzUcg7RPgnG6pxYjGqE1Rn3M",
-    "deployTx": "FVrP5cmZLQms5NfGW1wDSdAPHYPZ22q39tTPg2jrGFR5",
-    "deployedAt": "2026-11-11T09:24:04.876Z"
+    "codeHash": "EP1t9tBwuzsSN6mXBMvV5SPQmwtBmkyTP6gAN3zNorym",
+    "deployTx": "Ak3fvHiRbmRUjMVoNucdKEeievT8TQ3TqtyuyzF8ELA6",
+    "migratedFrom": "42ZeciXtgZtd2UKKi88WMzUcg7RPgnG6pxYjGqE1Rn3M",
+    "deployedAt": "2026-11-13T13:46:31.007Z"
   },
   "seed": {
     "mandateId": 7,
