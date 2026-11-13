@@ -154,6 +154,27 @@ export const toolSchemas: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'pay_on_ethereum',
+      description:
+        "Pay a vendor on Ethereum Sepolia via Chain Signatures, from the agent's own sub-mandate. Runs Vault.authorize_foreign_payment first " +
+        "(on-chain policy check: foreign-address allowlist, per-tx/daily/total caps in USD cents, logged either way); only if that returns " +
+        "Authorized does this actually request an MPC signature and broadcast the Sepolia transaction.",
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Sepolia address, e.g. 0x...' },
+          amount_eth: { type: 'string', description: 'Amount in ETH, e.g. "0.0003"' },
+          usd_cents: { type: 'number', description: 'USD-cent value of the payment, checked against the mandate\'s foreign-payment caps.' },
+          memo: { type: 'string' },
+        },
+        required: ['to', 'amount_eth', 'usd_cents', 'memo'],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 export const TOOL_NAMES_M5 = ['check_budget', 'call_paid_api'] as const;
@@ -161,6 +182,7 @@ export const TOOL_NAMES_M6 = [
   'check_budget', 'call_paid_api', 'post_task', 'list_bids', 'counter_offer', 'accept_bid', 'release_escrow', 'create_sub_mandate',
 ] as const;
 export const TOOL_NAMES_BREAK = ['check_budget', 'send_payment'] as const;
+export const TOOL_NAMES_S1 = ['pay_on_ethereum'] as const;
 
 /** Where to reach a worker's HTTP endpoint, by account id. */
 function workerUrl(workerId: string): string {

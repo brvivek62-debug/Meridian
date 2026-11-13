@@ -14,6 +14,8 @@
     "setup-agent-key": "tsx scripts/setup-agent-key.ts",
     "setup-worker-keys": "tsx scripts/setup-worker-keys.ts",
     "setup-break-agent": "tsx scripts/setup-break-agent.ts",
+    "setup-sepolia-agent": "tsx scripts/setup-sepolia-agent.ts",
+    "demo:s1": "tsx scripts/demo-s1.ts",
     "reset-demo": "tsx scripts/reset-demo.ts",
     "prove-no-bypass": "tsx scripts/prove-key-restriction.ts",
     "paid-api": "tsx vendors/paid-api/src/index.ts",
@@ -27,10 +29,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "chainsig.js": "1.1.16",
     "dotenv": "18.0.9",
     "express": "5.3.0",
     "near-api-js": "7.4.0",
-    "openai": "7.55.0"
+    "openai": "7.55.0",
+    "viem": "2.57.19"
   },
   "devDependencies": {
     "@types/express": "5.0.6",

@@ -7,7 +7,9 @@
     "workerScraper": "worker-scraper.vivek-meridian.testnet",
     "workerSummarizer": "worker-summarizer.vivek-meridian.testnet",
     "paidApi": "paid-api.vivek-meridian.testnet",
-    "demoOwner": "demo-owner.vivek-meridian.testnet"
+    "demoOwner": "demo-owner.vivek-meridian.testnet",
+    "sepoliaAgent": "sepolia-agent.vivek-meridian.testnet",
+    "mpcSigner": "mpc-signer.vivek-meridian.testnet"
   },
   "createTxs": {
     "vault": "BATJ6nSABhTpYY9BYeFGL8KGvrkQ5DxZqfXg1Ado3ebd",
@@ -15,7 +17,9 @@
     "workerScraper": "7CFgGKctHdDbcU9BJcQ37iQrPJ3e83LYhAU2Rw5nsKZH",
     "workerSummarizer": "GdnKFUYUpsU4YY1coLTgabnnhr2ABGhCCBg5eAZ78XGd",
     "paidApi": "EnGPmEDC5r2xE68LJR9VZ8tGrUFqjuGvZDQ1ocv5WJzy",
-    "demoOwner": "EMWbRxeHfeekmK9iyTmzk9U7UNQWpeuMJkPVMfYZZv58"
+    "demoOwner": "EMWbRxeHfeekmK9iyTmzk9U7UNQWpeuMJkPVMfYZZv58",
+    "sepoliaAgent": "Gi1i6Ktf8dsxgfhALeTTBqYFd3MvN2sS7ScDP6uthVX",
+    "mpcSigner": "66YbVsBAXtcZpjEV5NWysarfyJadXD1E4tXrfp8jbHke"
   },
   "vault": {
     "contractId": "vault.vivek-meridian.testnet",
@@ -43,5 +47,20 @@
     "budget": "2 NEAR",
     "createMandateTx": "GHksAdyAQ2ChtX8ZjUyzSom41xVh5Lo2spj8qAnhyEBK",
     "createdAt": "2026-11-12T09:57:45.339Z"
+  },
+  "sepolia": {
+    "subMandateId": 13,
+    "sepoliaAgentId": "sepolia-agent.vivek-meridian.testnet",
+    "mpcSignerId": "mpc-signer.vivek-meridian.testnet",
+    "mpcContractId": "v1.signer-prod.testnet",
+    "agentWallet": {
+      "address": "0x368F8697BcC4497FC9aCb76287003dEe7A9fd79a",
+      "path": "sepolia-agent-wallet"
+    },
+    "demoVendor": {
+      "address": "0xA18E6C4935dc0708dDe2Ab61b3bc21EbbAE3B534",
+      "path": "sepolia-demo-vendor"
+    },
+    "setupAt": "2026-11-13T13:57:52.806Z"
   }
 }

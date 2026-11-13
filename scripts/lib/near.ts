@@ -50,6 +50,13 @@ export const SUB_ACCOUNTS = {
   workerScraper: { prefix: 'worker-scraper', fund: '0.2' },
   workerSummarizer: { prefix: 'worker-summarizer', fund: '0.2' },
   paidApi: { prefix: 'paid-api', fund: '0.05' },
+  // S1 — Chain Signatures. Two narrow identities, same least-privilege pattern
+  // as `agent`: one key each, restricted to exactly one contract/method.
+  // sepoliaAgent calls only Vault.authorize_foreign_payment (on its own
+  // sub-mandate); mpcSigner calls only the MPC signer's `sign`. Kept separate
+  // because a NEAR function-call key is scoped to a single receiver contract.
+  sepoliaAgent: { prefix: 'sepolia-agent', fund: '0.3' },
+  mpcSigner: { prefix: 'mpc-signer', fund: '0.3' },
 } as const;
 export type Role = keyof typeof SUB_ACCOUNTS;
 export const accountId = (role: Role) => `${SUB_ACCOUNTS[role].prefix}.${OWNER_ID}`;
