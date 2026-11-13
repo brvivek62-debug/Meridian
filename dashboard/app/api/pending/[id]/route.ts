@@ -4,12 +4,15 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
-import { assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, signerFor, txHash, txValue, view } from '@/lib/near';
-import type { ActionResult, PendingPayment } from '@/lib/types';
+import { assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, READ_ONLY_OWNER_ACTIONS, VAULT_ID, signerFor, txHash, txValue, view } from '@/lib/near';
+import { READ_ONLY_OWNER_ACTIONS_MESSAGE, type ActionResult, type PendingPayment } from '@/lib/types';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     assertCoreEnv();
+    if (READ_ONLY_OWNER_ACTIONS) {
+      return NextResponse.json({ error: READ_ONLY_OWNER_ACTIONS_MESSAGE }, { status: 403 });
+    }
     if (!DEMO_OWNER_ID) {
       return NextResponse.json({ error: 'DEMO_OWNER_ACCOUNT_ID is not set. Run `npm run setup-dashboard`.' }, { status: 400 });
     }

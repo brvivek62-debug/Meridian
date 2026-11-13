@@ -45,6 +45,11 @@ export const AGENT_ID = process.env.AGENT_ACCOUNT_ID ?? '';
 export const DEMO_OWNER_ID = process.env.DEMO_OWNER_ACCOUNT_ID;
 const DEMO_OWNER_KEY = process.env.DEMO_OWNER_PRIVATE_KEY;
 
+// Public demo lock: true on the Vercel deploy. Owner actions (create mandate,
+// approve, reject) stop short of signing/submitting a transaction — anyone
+// with the URL can otherwise act as demo-owner. Local dev leaves this unset.
+export const READ_ONLY_OWNER_ACTIONS = process.env.READ_ONLY_OWNER_ACTIONS === 'true';
+
 // --- /break challenge (see scripts/setup-break-agent.ts) ---
 export const BREAK_AGENT_ID = process.env.BREAK_AGENT_ACCOUNT_ID;
 export const BREAK_MANDATE_ID = process.env.BREAK_MANDATE_ID !== undefined ? Number(process.env.BREAK_MANDATE_ID) : undefined;

@@ -4,12 +4,13 @@ export const dynamic = 'force-dynamic';
 // run past Vercel's default serverless timeout.
 export const maxDuration = 60;
 
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { classifyBlockReasons } from '@/lib/blockRules';
 import { runBreakAgent } from '@/lib/breakAgent';
 import { breakStore, toPublic, type Attempt } from '@/lib/breakStore';
 import { EXPLORER_BASE, VAULT_ID } from '@/lib/near';
+import { clientIpHash } from '@/lib/rateLimit';
 
 const MAX_MESSAGE_LEN = 1000;
 const RATE_LIMIT_PER_IP = 5;
@@ -20,12 +21,6 @@ const RECENT_LIMIT = 10;
 
 function isEnabled(): boolean {
   return process.env.BREAK_ENABLED !== 'false';
-}
-
-function clientIpHash(req: NextRequest): string {
-  const fwd = req.headers.get('x-forwarded-for');
-  const ip = (fwd ? fwd.split(',')[0] : req.headers.get('x-real-ip')) ?? '127.0.0.1';
-  return createHash('sha256').update(ip.trim()).digest('hex').slice(0, 16);
 }
 
 const TESTNET_ACCOUNT_RE = /^[a-z0-9_-]{2,64}(\.[a-z0-9_-]{2,64})*\.testnet$/;

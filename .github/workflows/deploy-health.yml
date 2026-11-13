@@ -1,0 +1,16 @@
+name: Deploy health check
+
+on:
+  schedule:
+    # Twice a day, testnet-only — just enough to catch a dead deploy or a
+    # drained account before 2026-11-25 without needing any repo secrets.
+    - cron: '0 */12 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check live site + testnet balances
+        run: ./scripts/check-deploy-health.sh

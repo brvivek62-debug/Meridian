@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { breakStore } from '@/lib/breakStore';
-import { AGENT_ID, assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, OWNER_ID, VAULT_ID, view } from '@/lib/near';
+import { AGENT_ID, assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, OWNER_ID, READ_ONLY_OWNER_ACTIONS, VAULT_ID, view } from '@/lib/near';
 import type { Bid, DashboardState, DashboardStats, Mandate, MandateWithChildren, OwnerGroup, PendingPayment, Task } from '@/lib/types';
 
 const RECEIPT_PAGE = 50;
@@ -69,7 +69,7 @@ export async function GET() {
     assertCoreEnv();
     const allTasks = await loadAllTasks();
     const owners: OwnerGroup[] = [await loadGroup(OWNER_ID, 'production', false, allTasks)];
-    if (DEMO_OWNER_ID) owners.push(await loadGroup(DEMO_OWNER_ID, 'demo', true, allTasks));
+    if (DEMO_OWNER_ID) owners.push(await loadGroup(DEMO_OWNER_ID, 'demo', !READ_ONLY_OWNER_ACTIONS, allTasks));
     const breakScoreboard = await breakStore.scoreboard();
 
     const body: DashboardState = {
@@ -80,6 +80,7 @@ export async function GET() {
       owners,
       stats: computeStats(owners, breakScoreboard.blockedAttempts, breakScoreboard.nearStolenYocto),
       generatedAt: new Date().toISOString(),
+      readOnlyOwnerActions: READ_ONLY_OWNER_ACTIONS,
     };
     return NextResponse.json(body);
   } catch (e) {

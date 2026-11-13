@@ -172,13 +172,17 @@ export default function Page() {
 
           <section>
             <SectionHeading>Approvals inbox</SectionHeading>
-            <ApprovalsInbox owners={state.owners} onAct={handleAct} />
+            <ApprovalsInbox owners={state.owners} onAct={handleAct} readOnlyOwnerActions={state.readOnlyOwnerActions} />
           </section>
 
           <section>
             <SectionHeading>Create mandate</SectionHeading>
             {demoGroup ? (
-              <CreateMandateForm defaultAgentId={state.agentAccountId} onSubmit={handleCreateMandate} />
+              <CreateMandateForm
+                defaultAgentId={state.agentAccountId}
+                onSubmit={handleCreateMandate}
+                readOnlyOwnerActions={state.readOnlyOwnerActions}
+              />
             ) : (
               <p className="text-[14px] text-muted">
                 No demo-owner account configured — run <code>npm run setup-dashboard</code>.

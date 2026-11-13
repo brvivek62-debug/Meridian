@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { TxLink } from '@/components/TxLink';
+import { READ_ONLY_OWNER_ACTIONS_MESSAGE } from '@/lib/types';
 
 type Result = { ok: boolean; error?: string; mandateId?: number; explorer?: string };
 
@@ -18,8 +19,10 @@ interface ParsedMandate {
 export function CreateMandateForm({
   defaultAgentId,
   onSubmit,
+  readOnlyOwnerActions,
 }: {
   defaultAgentId: string;
+  readOnlyOwnerActions: boolean;
   onSubmit: (body: {
     agent: string;
     budgetNear: string;
@@ -93,7 +96,7 @@ export function CreateMandateForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (validationErrors.length > 0) return;
+    if (readOnlyOwnerActions || validationErrors.length > 0) return;
     setBusy(true);
     setResult(null);
     const r = await onSubmit({
@@ -164,10 +167,11 @@ export function CreateMandateForm({
             </ul>
           )}
           <div className="flex items-center gap-3">
-            <Button type="submit" disabled={validationErrors.length > 0} loading={busy}>
+            <Button type="submit" disabled={readOnlyOwnerActions || validationErrors.length > 0} loading={busy}>
               {busy ? 'Creating…' : 'Create mandate'}
             </Button>
-            {result &&
+            {readOnlyOwnerActions && <span className="text-[13px] text-muted">{READ_ONLY_OWNER_ACTIONS_MESSAGE}</span>}
+            {!readOnlyOwnerActions && result &&
               (result.ok ? (
                 <span className="flex items-center gap-2 text-[13px] text-success">
                   Mandate {result.mandateId} created · {result.explorer && <TxLink explorer={result.explorer} />}

@@ -1,5 +1,8 @@
 /** JSON shapes returned by the Vault's view methods (contracts/vault/src/lib.rs). */
 
+/** Shown both server-side (403 body) and client-side when READ_ONLY_OWNER_ACTIONS is set. */
+export const READ_ONLY_OWNER_ACTIONS_MESSAGE = 'Owner actions are disabled on the public demo.';
+
 export interface Mandate {
   id: number;
   owner: string;
@@ -104,4 +107,6 @@ export interface DashboardState {
   owners: OwnerGroup[];
   stats: DashboardStats;
   generatedAt: string;
+  /** True on the public Vercel deploy: owner actions are disabled. */
+  readOnlyOwnerActions: boolean;
 }

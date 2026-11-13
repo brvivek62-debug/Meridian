@@ -4,7 +4,8 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
-import { AGENT_ID, assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, nearToYocto, signerFor, txHash, txValue } from '@/lib/near';
+import { AGENT_ID, assertCoreEnv, DEMO_OWNER_ID, EXPLORER_BASE, READ_ONLY_OWNER_ACTIONS, VAULT_ID, nearToYocto, signerFor, txHash, txValue } from '@/lib/near';
+import { READ_ONLY_OWNER_ACTIONS_MESSAGE } from '@/lib/types';
 
 interface CreateMandateBody {
   agent?: string;
@@ -18,6 +19,9 @@ interface CreateMandateBody {
 export async function POST(req: NextRequest) {
   try {
     assertCoreEnv();
+    if (READ_ONLY_OWNER_ACTIONS) {
+      return NextResponse.json({ error: READ_ONLY_OWNER_ACTIONS_MESSAGE }, { status: 403 });
+    }
     if (!DEMO_OWNER_ID) {
       return NextResponse.json({ error: 'DEMO_OWNER_ACCOUNT_ID is not set. Run `npm run setup-dashboard`.' }, { status: 400 });
     }

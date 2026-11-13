@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { formatNear, shortAccount } from '@/lib/format';
-import type { OwnerGroup } from '@/lib/types';
+import { READ_ONLY_OWNER_ACTIONS_MESSAGE, type OwnerGroup } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { TxLink } from '@/components/TxLink';
 
@@ -11,14 +11,16 @@ type ActResult = { ok: boolean; error?: string; explorer?: string; status?: stri
 export function ApprovalsInbox({
   owners,
   onAct,
+  readOnlyOwnerActions,
 }: {
   owners: OwnerGroup[];
   onAct: (pendingId: number, action: 'approve' | 'reject') => Promise<ActResult>;
+  readOnlyOwnerActions: boolean;
 }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [results, setResults] = useState<Record<number, ActResult>>({});
 
-  const rows = owners.flatMap((o) => o.pending.map((p) => ({ ...p, canAct: o.canAct })));
+  const rows = owners.flatMap((o) => o.pending.map((p) => ({ ...p, canAct: o.canAct, role: o.role })));
 
   if (rows.length === 0) {
     return <p className="text-[14px] text-muted">Nothing waiting on approval.</p>;
@@ -51,7 +53,11 @@ export function ApprovalsInbox({
                   </Button>
                 </div>
               ) : (
-                <span className="text-[13px] text-muted">Read-only — needs the real owner&rsquo;s keychain key</span>
+                <span className="text-[13px] text-muted">
+                  {p.role === 'demo' && readOnlyOwnerActions
+                    ? READ_ONLY_OWNER_ACTIONS_MESSAGE
+                    : 'Read-only — needs the real owner’s keychain key'}
+                </span>
               )}
             </div>
             <div className="mt-1.5 text-[13px] text-muted">
