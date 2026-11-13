@@ -1,5 +1,8 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// A NEAR AI tool-calling loop (up to MAX_TURNS round trips) plus a NEAR tx can
+// run past Vercel's default serverless timeout.
+export const maxDuration = 60;
 
 import { createHash, randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';

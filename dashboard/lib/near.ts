@@ -8,7 +8,7 @@
  * CLI scripts in scripts/.
  */
 import { config as loadEnv } from 'dotenv';
-import { Account, JsonRpcProvider, type KeyPairString } from 'near-api-js';
+import { Account, FailoverRpcProvider, JsonRpcProvider, type KeyPairString } from 'near-api-js';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -28,9 +28,13 @@ if (NETWORK !== 'testnet') {
   throw new Error(`NEAR_NETWORK is "${NETWORK}". The dashboard only runs against testnet.`);
 }
 
+// Two independent testnet RPC endpoints. fastnear's public tier rate-limits
+// aggressively under concurrent serverless traffic; near.org is the fallback.
+// FailoverRpcProvider retries each with backoff before moving to the next.
 export const RPC_URL = process.env.NEAR_RPC_URL ?? 'https://rpc.testnet.fastnear.com';
+export const RPC_URL_FALLBACK = process.env.NEAR_RPC_URL_FALLBACK ?? 'https://rpc.testnet.near.org';
 export const EXPLORER_BASE = 'https://testnet.nearblocks.io';
-export const provider = new JsonRpcProvider({ url: RPC_URL });
+export const provider = new FailoverRpcProvider([new JsonRpcProvider({ url: RPC_URL }), new JsonRpcProvider({ url: RPC_URL_FALLBACK })]);
 
 export const VAULT_ID = requireEnv('VAULT_CONTRACT_ID');
 export const OWNER_ID = requireEnv('OWNER_ACCOUNT_ID');
@@ -41,23 +45,44 @@ const DEMO_OWNER_KEY = process.env.DEMO_OWNER_PRIVATE_KEY;
 // --- /break challenge (see scripts/setup-break-agent.ts) ---
 export const BREAK_AGENT_ID = process.env.BREAK_AGENT_ACCOUNT_ID;
 export const BREAK_MANDATE_ID = process.env.BREAK_MANDATE_ID !== undefined ? Number(process.env.BREAK_MANDATE_ID) : undefined;
+// Only needed where ~/.near-credentials doesn't exist, i.e. the Vercel deploy
+// (serverless has no persistent filesystem to hold it). Local dev falls back
+// to the credentials file, same as every other demo account.
+const BREAK_AGENT_KEY = process.env.BREAK_AGENT_PRIVATE_KEY;
 
-/** View call — read-only, needs no key. */
+const VIEW_CACHE_TTL_MS = 5000;
+const viewCache = new Map<string, { value: unknown; expires: number }>();
+
+/**
+ * View call — read-only, needs no key. Cached for a few seconds so a page full
+ * of concurrent visitors polling the dashboard shares one RPC call instead of
+ * each hitting fastnear's public rate limit directly.
+ */
 export async function view<T>(contractId: string, methodName: string, args: Record<string, unknown> = {}): Promise<T> {
-  return (await provider.callFunction({ contractId, method: methodName, args })) as T;
+  const key = `${contractId}:${methodName}:${JSON.stringify(args)}`;
+  const now = Date.now();
+  const cached = viewCache.get(key);
+  if (cached && cached.expires > now) return cached.value as T;
+  const value = (await provider.callFunction({ contractId, method: methodName, args })) as T;
+  viewCache.set(key, { value, expires: now + VIEW_CACHE_TTL_MS });
+  return value;
 }
 
 /**
  * An Account that can sign. For demo-owner, the key comes from `.env`
  * (DEMO_OWNER_PRIVATE_KEY) — never from the filesystem the browser could
- * somehow reach. For any other account (e.g. the real agent, for the attack
- * route) the key comes from ~/.near-credentials, the same file the CLI
+ * somehow reach. For break-agent, it comes from `.env` (BREAK_AGENT_PRIVATE_KEY)
+ * when set (the Vercel deploy), else ~/.near-credentials (local dev). For any
+ * other account the key comes from ~/.near-credentials, the same file the CLI
  * scripts in scripts/ already use — still server-side only.
  */
 export function signerFor(accountId: string): Account {
   if (DEMO_OWNER_ID && accountId === DEMO_OWNER_ID) {
     if (!DEMO_OWNER_KEY) throw new Error('DEMO_OWNER_PRIVATE_KEY is not set in .env. Run `npm run setup-dashboard`.');
     return new Account(accountId, provider, DEMO_OWNER_KEY as KeyPairString);
+  }
+  if (BREAK_AGENT_ID && accountId === BREAK_AGENT_ID && BREAK_AGENT_KEY) {
+    return new Account(accountId, provider, BREAK_AGENT_KEY as KeyPairString);
   }
   const path = join(homedir(), '.near-credentials', NETWORK, `${accountId}.json`);
   if (!existsSync(path)) throw new Error(`No key for ${accountId} at ${path}.`);

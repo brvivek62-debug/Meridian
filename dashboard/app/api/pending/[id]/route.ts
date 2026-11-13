@@ -1,4 +1,6 @@
 export const runtime = 'nodejs';
+// A NEAR transaction (approve/reject) can take longer than Vercel's default timeout.
+export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, signerFor, txHash, txValue, view } from '@/lib/near';

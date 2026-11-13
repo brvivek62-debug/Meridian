@@ -4,7 +4,15 @@
  * or submits anything itself). The dashboard always shows the result for the
  * owner to review and edit before create_mandate is ever called.
  */
+import { config as loadEnv } from 'dotenv';
 import OpenAI from 'openai';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Load the repo-root .env directly (not dashboard/.env*), same as lib/near.ts
+// — this route doesn't import near.ts, so it can't rely on that module's load
+// happening first. No-op on Vercel, where env vars come from the platform.
+loadEnv({ path: join(resolve(dirname(fileURLToPath(import.meta.url)), '../..'), '.env') });
 
 function requireEnv(name: string): string {
   const v = process.env[name];

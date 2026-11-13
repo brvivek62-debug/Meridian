@@ -1,4 +1,6 @@
 export const runtime = 'nodejs';
+// A NEAR transaction (create_mandate) can take longer than Vercel's default timeout.
+export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { AGENT_ID, DEMO_OWNER_ID, EXPLORER_BASE, VAULT_ID, nearToYocto, signerFor, txHash, txValue } from '@/lib/near';

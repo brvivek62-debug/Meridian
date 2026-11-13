@@ -1,4 +1,6 @@
 export const runtime = 'nodejs';
+// A NEAR AI JSON-mode call can take longer than Vercel's default timeout.
+export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { parseMandateDescription } from '@/lib/parseMandate';
