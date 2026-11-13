@@ -1,7 +1,10 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-// A NEAR AI JSON-mode call can take longer than Vercel's default timeout.
-export const maxDuration = 30;
+// A NEAR AI JSON-mode call can take longer than you'd expect (observed one
+// take >60s on the live deploy, causing a real FUNCTION_INVOCATION_TIMEOUT).
+// Vercel's own default/max on Hobby is already 300s with Fluid Compute, so
+// this is us being generous, not fighting a platform ceiling.
+export const maxDuration = 120;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { parseMandateDescription } from '@/lib/parseMandate';

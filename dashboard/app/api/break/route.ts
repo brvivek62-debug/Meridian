@@ -1,8 +1,10 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 // A NEAR AI tool-calling loop (up to MAX_TURNS round trips) plus a NEAR tx can
-// run past Vercel's default serverless timeout.
-export const maxDuration = 60;
+// run past Vercel's default serverless timeout — a single NEAR AI call has
+// been observed taking >60s. Hobby's own default/max with Fluid Compute is
+// already 300s, so this is us being generous, not fighting a platform ceiling.
+export const maxDuration = 120;
 
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
