@@ -42,6 +42,7 @@ scripts/           Deploy, seed, demo-run scripts
 - **Worker key restriction (M6).** The same pattern (`scripts/lib/keys.ts`, shared by `setup-agent-key.ts` and `setup-worker-keys.ts`) restricts `worker-scraper.vivek-meridian.testnet` to `submit_bid` only, and `worker-summarizer.vivek-meridian.testnet` to `submit_bid` + `pay` — the latter because once it is granted a sub-mandate, it also spends through the Vault on its own. Neither worker account can ever hold or move funds outside a Vault-checked call.
 
 ### Not enforced on-chain (yet)
+- **Chain Signatures cross-chain payments (S1, experimental, feature-frozen).** `authorize_foreign_payment` (the Vault method that checks a mandate's foreign-payment allowlist/caps/budget and logs an `Authorized`/`Blocked` receipt) is implemented and proven on testnet — see the real tx links below. What is **not** done is the MPC-signing half: `sepolia-agent.vivek-meridian.testnet` is correctly restricted to call only `authorize_foreign_payment` (nothing else, not even `pay`), but the account that actually asks NEAR's MPC signer (`v1.signer-prod.testnet`) to sign the Sepolia transaction, `mpc-signer-3.vivek-meridian.testnet`, had to be given a **full-access key**, because `chainsig.js`'s `sign()` action always attaches a 1 yoctoNEAR deposit and NEAR's protocol flatly rejects any deposit on a call signed by a function-call-restricted key — no allowance setting can fix that. So the link between "the Vault authorized this" and "the MPC signer actually signs it" is enforced only by our own TypeScript control flow (`agent/src/chainSig.ts` always calls `authorize_foreign_payment` first and only proceeds to `sign` if the result is `Authorized`), not by a NEAR-level guarantee the way the Vault's other policy checks are. The derived agent Sepolia wallet also hasn't been funded with testnet ETH yet, so no signed Sepolia transaction has actually been broadcast. The honest status: **implemented — Vault-side authorization + Sepolia address derivation; in progress — MPC signing.** `scripts/demo-s1.ts` (`npm run demo:s1`) is marked experimental and is not wired into the dashboard or `npm run demo`. Roadmap: either give `mpc-signer` its own narrowly-scoped contract that wraps `sign()` without a caller-supplied deposit, or move to the fully on-chain-enforced design where the Vault contract itself calls the MPC signer.
 - **Contract upgrades.** `vault.vivek-meridian.testnet` keeps a full-access key held by the deployer, so the deployer can replace the code. The on-chain code hash is listed under [Deployments and proofs](#deployments-and-proofs) for anyone to check. A production Vault would remove that key or hand upgrades to a DAO.
 - **Delivery.** The Vault does not know whether a vendor delivered what was paid for. Paid-API access is verified by the vendor, off-chain. Escrow release is the poster agent's decision (or the owner's).
 - **Combined daily spend across a delegation tree.** Daily caps are per mandate. A parent and its sub-mandates can together spend more in one day than the parent's daily cap, though never more than the parent's total budget.
@@ -191,7 +192,9 @@ Both `/break` and the main dashboard show **"the line"** (`dashboard/components/
 | Hosted demo (Vercel, testnet) | [meridian-zeta-murex.vercel.app](https://meridian-zeta-murex.vercel.app) — dashboard + [`/break`](https://meridian-zeta-murex.vercel.app/break), Upstash Redis-backed, up until at least 2026-11-25 |
 | Balances topped up for the hosted demo (2026-11-13, from two faucet-sponsored accounts, `scripts/check-deploy-health.sh` to re-check) | `vault`: 19.02 NEAR (~16.4 NEAR spendable over the ~2.65 NEAR already locked for storage) · `break-agent`: 4.30 NEAR (gas only — its key never attaches a deposit) · `demo-owner`: 5.60 NEAR · `owner`: 3.90 NEAR — comfortably covers 200 attacks/day through 2026-11-25 |
 | Demo video | _TODO_ |
-| Chain Signatures payment (Sepolia) tx | _TODO_ |
+| Chain Signatures (S1, experimental): `authorize_foreign_payment` — Vault-side authorization proven on testnet. **Authorized** (vendor on allowlist) | [`6D9oxnsy…obSC`](https://testnet.nearblocks.io/txns/6D9oxnsyWnBsmvkgDcY7oKF8GghUJ5SJbG45F7KMobSC) |
+| Chain Signatures (S1): `authorize_foreign_payment` **Blocked** (destination not on allowlist) | [`DG3ZLKJ4…Cisq`](https://testnet.nearblocks.io/txns/DG3ZLKJ4cmkN94TsapLGJevv97vMYBQVNEpZRU3YCisq) |
+| Chain Signatures (S1) MPC-signed Sepolia payment tx | _not yet run — agent's derived Sepolia wallet needs testnet ETH; see trust-model note above_ |
 | NEAR Intents swap (mainnet) tx | _TODO_ |
 
 ## Libraries, templates and tools used
@@ -230,7 +233,7 @@ spider sensi
 - [ ] M8 `scripts/demo.ts` runs the full demo in one command
 
 ### SHOULD
-- [ ] S1 Chain Signatures Sepolia payment via `authorize_foreign_payment`
+- [~] S1 Chain Signatures (experimental, feature-frozen): Vault-side `authorize_foreign_payment` implemented + proven on testnet (real tx links above); MPC signing of the actual Sepolia tx in progress, not yet completed
 - [ ] S2 1Click quote in live flow + one real mainnet swap recorded
 - [x] S3 Delegation tree visualization
 

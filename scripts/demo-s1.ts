@@ -1,6 +1,17 @@
 /**
- * S1 demo: one allowed Chain Signatures payment on Ethereum Sepolia, and one
- * blocked attempt (destination not on the mandate's foreign-payment allowlist).
+ * EXPERIMENTAL (S1, feature-frozen): one allowed Chain Signatures payment on
+ * Ethereum Sepolia, and one blocked attempt (destination not on the
+ * mandate's foreign-payment allowlist).
+ *
+ * As of the feature freeze, the Vault-side half of this (authorize_foreign_
+ * payment: policy check, allowlist, caps, on-chain receipt) is implemented
+ * and proven on testnet — see README trust-model section and the Deployments
+ * table for real tx links. The MPC-signing half (deriving the Sepolia address
+ * and actually broadcasting a signed Sepolia tx via v1.signer-prod.testnet)
+ * has not completed a full run: it needs the derived agent wallet funded
+ * with Sepolia testnet ETH from a faucet, which hasn't happened yet. Do not
+ * treat a run of this script as a finished cross-chain payment until it logs
+ * a real sepoliaTx. Nothing here is wired into the dashboard or npm run demo.
  *
  * Requires the agent's derived Sepolia wallet (printed by
  * `npm run setup-sepolia-agent`) to hold a small amount of Sepolia ETH — this

@@ -56,7 +56,16 @@ export const SUB_ACCOUNTS = {
   // sub-mandate); mpcSigner calls only the MPC signer's `sign`. Kept separate
   // because a NEAR function-call key is scoped to a single receiver contract.
   sepoliaAgent: { prefix: 'sepolia-agent', fund: '0.3' },
-  mpcSigner: { prefix: 'mpc-signer', fund: '0.3' },
+  // "-3": chainsig.js's `sign()` action always attaches a 1 yoctoNEAR deposit,
+  // and NEAR's protocol flatly disallows ANY deposit on a function call signed
+  // by a function-call-permission key (not an allowance issue — no allowance
+  // could ever fix it). So this identity needs a full-access key, not a
+  // restricted one; its only narrow behavior is enforced by our own code
+  // (agent/src/chainSig.ts), not by a NEAR-level permission — see the
+  // README's trust-model section. mpc-signer and mpc-signer-2 (restricted,
+  // first with too-small an allowance, then still deposit-incompatible) are
+  // abandoned along with the trivial testnet funds sent to their addresses.
+  mpcSigner: { prefix: 'mpc-signer-3', fund: '0.5' },
 } as const;
 export type Role = keyof typeof SUB_ACCOUNTS;
 export const accountId = (role: Role) => `${SUB_ACCOUNTS[role].prefix}.${OWNER_ID}`;
