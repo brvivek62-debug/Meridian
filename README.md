@@ -94,6 +94,8 @@ Hosting the dashboard publicly adds attack surface that has nothing to do with t
 
 ## Run locally
 
+**Prerequisites:** Node ≥ 20; Rust + the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`); [`cargo-near`](https://github.com/near/cargo-near) (`cargo install cargo-near`); [near-cli-rs](https://github.com/near/near-cli-rs); a funded NEAR testnet account (see [Q-008](HACKATHON.md) for a faucet) with its key in the near-cli-rs keychain. Verified by cloning this repo fresh and following every step below in order on 2026-11-14.
+
 ### One command (M8)
 
 After the setup steps below (deploy, seed, agent/worker keys — everything through [the agent marketplace section](#the-agent-marketplace-workers-bidding-sub-mandates-m6)) have been run once:
@@ -119,7 +121,7 @@ cargo near build non-reproducible-wasm   # → target/near/vault.wasm
 cargo test                               # unit tests + sandbox tests
 ```
 
-Sandbox tests use `near-sandbox` + `near-api` (what `cargo near new` generates now, in place of `near-workspaces`) and run on Apple Silicon. The 24h daily-cap rollover is unit-tested with `testing_env!` rather than sandbox-tested: sandbox `fast_forward` moves the clock only ~0.4 s per block here, so 24h would take ~35 min per run. Details: [contracts/vault/README.md](contracts/vault/README.md).
+Sandbox tests use `near-sandbox` + `near-api` (what `cargo near new` generates now, in place of `near-workspaces`) and run on Apple Silicon. The 24h daily-cap rollover is unit-tested with `testing_env!` rather than sandbox-tested: sandbox `fast_forward` moves the clock only ~0.4 s per block here, so 24h would take ~35 min per run. Details: [contracts/vault/README.md](contracts/vault/README.md). First run downloads the `near-sandbox` binary, so `tests/sandbox.rs`'s 8 tests can take a few minutes the first time and under 20s after that.
 
 ### Deploy to testnet and seed
 
@@ -171,7 +173,10 @@ To run the pieces by hand instead of `demo:m6`: `npm run paid-api`, `npm run wor
 
 ### Dashboard (M7)
 
+`dashboard/` is its own package (not an npm workspace of the root `package.json`), so it needs its own install once:
+
 ```bash
+npm install --prefix dashboard
 npm run setup-dashboard     # creates demo-owner.<owner>.testnet, writes its key to .env, one-shot
 npm run dashboard           # → http://localhost:3000
 ```
