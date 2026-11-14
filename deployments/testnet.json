@@ -29,16 +29,16 @@
     "deployedAt": "2026-11-13T13:46:31.007Z"
   },
   "seed": {
-    "mandateId": 7,
+    "mandateId": 14,
     "agent": "agent.vivek-meridian.testnet",
     "budget": "5 NEAR",
-    "createMandateTx": "98Fnv6oQNAMW1qZzhB9ooMo2Ho2LuFkzANuBaW17ZjjZ",
+    "createMandateTx": "4NbrdAMg5TPTHEXvUpXX3DL395sgkc9tMHLXErLWQpGp",
     "subMandate": {
-      "id": 8,
+      "id": 15,
       "agent": "worker-summarizer.vivek-meridian.testnet",
       "budget": "1 NEAR"
     },
-    "resetAt": "2026-11-12T09:57:45.338Z"
+    "resetAt": "2026-11-14T04:11:41.553Z"
   },
   "break": {
     "accountId": "break-agent.vivek-meridian.testnet",
