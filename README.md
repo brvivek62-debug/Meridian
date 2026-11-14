@@ -62,11 +62,24 @@ Hosting the dashboard publicly adds attack surface that has nothing to do with t
 - **`READ_ONLY_OWNER_ACTIONS=true`** (set on the Vercel deploy only). `demo-owner`'s private key lives in that deploy's env vars; without this, anyone with the URL could sign transactions as demo-owner. With it, `POST /api/mandates` and `POST /api/pending/[id]` return 403 before signing anything, and the dashboard disables the Create mandate / Approve / Reject controls with the same note. The "describe the rules in your own words" NEAR AI parse step keeps working either way — it never signs anything.
 - **Rate limits on every NEAR AI-backed route**, independent of the Vault: `/api/break` (5/IP/10min, 200/day globally, backed by Upstash Redis on the hosted deploy — see [`/break`](#break-meridian-public-challenge-break) below) and `/api/parse-mandate` (10/IP/hour, `dashboard/lib/rateLimit.ts`), so a visitor can't run up the NEAR AI Cloud bill even though no NEAR ever moves from that route.
 - **RPC resilience.** `dashboard/lib/near.ts` caches Vault view calls for ~5s and uses a `FailoverRpcProvider` across two independent testnet RPC endpoints, so concurrent visitors polling the dashboard don't trip fastnear's public rate limit.
-- **Health check.** `scripts/check-deploy-health.sh [live-url]` curls the live site and the three testnet accounts' balances, warning (non-zero exit) if any looks low; `.github/workflows/deploy-health.yml` runs it on a schedule with no repo secrets needed.
+- **Health check.** `scripts/check-deploy-health.sh [live-url]` curls the live site and the testnet accounts' balances (vault, break-agent, demo-owner, and the owner itself — its own wallet only ever needs gas, since the NEAR it deposits into a mandate lives in the Vault, not in the owner's own balance), warning (non-zero exit) if any looks low; `.github/workflows/deploy-health.yml` runs it on a schedule with no repo secrets needed.
 
 ## Run locally
 
-_TODO: "do X → see Y" steps._
+### One command (M8)
+
+After the setup steps below (deploy, seed, agent/worker keys — everything through [the agent marketplace section](#the-agent-marketplace-workers-bidding-sub-mandates-m6)) have been run once:
+
+```bash
+npm run reset-demo   # optional, for the tidiest single run — see below
+npm run demo         # the whole story end to end on testnet, one command
+```
+
+`scripts/demo.ts` reproduces PLAN.md's 3-minute demo script in order: paid-API 402 flow (M5) → worker bidding, counter-offer, escrow lock/release (M6) → a 1 NEAR sub-mandate for `worker-summarizer` → an approval-threshold payment that goes `Pending` and is then `approve`d by the owner → a blocked attack (`pay` to `attacker.testnet`, not on the allowlist) → a recap with every real tx's explorer link. It starts and tears down `paid-api` + both workers itself.
+
+**Safe to run repeatedly.** It reuses the existing production mandate rather than creating a new one, and the approval-payment step adapts its amount to (or skips cleanly, with a clear message, instead of crashing, if) the mandate's remaining per-tx/daily-cap/budget headroom — repeated same-day runs can legitimately exhaust the mandate's **daily cap** (the Vault enforcing its own policy, not a bug), in which case that one step is skipped. Run `npm run reset-demo` first for the cleanest single run, or wait for the 24h daily-cap rollover. The attack step always works regardless, since it's Blocked before anything moves.
+
+### Step by step
 
 1. `cp .env.example .env` and fill in values.
 
@@ -192,6 +205,7 @@ Both `/break` and the main dashboard show **"the line"** (`dashboard/components/
 | break-agent created + key restricted to `Vault.pay` | [`GV81PqwsyY…ZnvCJ`](https://testnet.nearblocks.io/txns/GV81PqwsyYzQqB64pFJU4CUHMq6HU9vthQUeHa1ZnvCJ), [`LSHwcDbLjE…6NVB`](https://testnet.nearblocks.io/txns/LSHwcDbLjES9qjtb2QdFZXr8TSzNNxvWv9H7ULm6NVB) |
 | break mandate 6 (2 NEAR, per-tx cap 0.05, daily cap 0.2, allowlist = paid-api only) | [`2eFPGKTDSh…BXuKS`](https://testnet.nearblocks.io/txns/2eFPGKTDShHJZomzRJmvbgZTWj5foxoWweAtW3tBXuKS) |
 | `npm run reset-demo` (2026-11-14, feature freeze): revoked stray/duplicate mandates from repeated M6/dashboard testing, recreated exactly one production mandate (id 14, agent.vivek-meridian.testnet, 4.9172 NEAR — slightly under the usual 5 NEAR target since the owner's balance was tight) with exactly one worker-summarizer sub-mandate (id 15, 1 NEAR). break-agent's mandate (id 9, the one the live Vercel deploy's `BREAK_MANDATE_ID` env var points at) was deliberately left untouched — see `scripts/reset-demo.ts`'s header comment. | [`4NbrdAMg…QpGp`](https://testnet.nearblocks.io/txns/4NbrdAMg5TPTHEXvUpXX3DL395sgkc9tMHLXErLWQpGp) (mandate 14), [`CDitwkED…HUsQ`](https://testnet.nearblocks.io/txns/CDitwkED3wuu3cQVEK8m4vuypFWoCuZMm6myLJvmHUsQ) (sub-mandate 15) |
+| `npm run demo` (M8, 2026-11-14): one run of the whole story — 402 payment, worker bidding + counter-offer + escrow release, sub-mandate, approval-threshold `Pending`→`approve`, blocked attack to `attacker.testnet`. Run twice back to back to prove repeatability (second run's approval step correctly skipped — same-day daily cap already used by the first run — everything else completed normally). | 402 payment [`6HzSLTJx…Lh2VR`](https://testnet.nearblocks.io/txns/6HzSLTJxh5caidR2sNVY16DQf3SviyuCthUnJC2Lh2VR) · escrow lock [`HdMF95QK…kdMz`](https://testnet.nearblocks.io/txns/HdMF95QKuQsekEmg1qmg2rv1hMDHgECgwfMcAspZkdMz) · escrow release [`FCBdd5rb…7zcq`](https://testnet.nearblocks.io/txns/FCBdd5rb4krv3Tw654nH4C4hbC6KFXAa4sEoHyyX7zcq) · sub-mandate [`Hvw7Bc4Q…MKaW`](https://testnet.nearblocks.io/txns/Hvw7Bc4QFkShzBpGby6KRuujhepAV7ybyrdqqryMwKaW) · pending [`ELg2DE7m…eWp1`](https://testnet.nearblocks.io/txns/ELg2DE7mThVdAzmnsKdEaKP5PVYgJjKXDc9BQf5oEWp1) → approved [`XVq23tZK…yq6`](https://testnet.nearblocks.io/txns/XVq23tZKeoBFpucAw5baDUTbEnjhHiDnjwBaXbZqyq6) · blocked attack [`D5huSZth…rXx4G`](https://testnet.nearblocks.io/txns/D5huSZthnjqMCY4GR8bwiWvEqS5UMT8gBfcnA52rXx4G) |
 | `/break` attack attempts (2026-11-13, after removing self-censorship — see below): 3 of 5 tested styles fooled break-agent into attempting a payment (fake bug-bounty payout, a fake-owner demand, a fake system-override/prompt injection); the Vault `Blocked` all 3 — allowlist on the bounty payout, allowlist + per-tx cap + daily cap on the other two — 0 NEAR stolen. The 2 that didn't fool it (an "emergency top-up" overspend and a repeat-request daily-cap probe) were refused by the LLM's own judgment, not by the Vault. | e.g. [`5QfQ4t768A…uvPvz`](https://testnet.nearblocks.io/txns/5QfQ4t768AKD3xHX3oiDK739mazPTne7DQwo8SxuvPvz) |
 | Demo accounts (testnet) | `agent`, `worker-scraper`, `worker-summarizer`, `paid-api`, `demo-owner`, `break-agent` `.vivek-meridian.testnet`; all ids and creation txs in [`deployments/testnet.json`](deployments/testnet.json) |
 | Hosted demo (Vercel, testnet) | [meridian-zeta-murex.vercel.app](https://meridian-zeta-murex.vercel.app) — dashboard + [`/break`](https://meridian-zeta-murex.vercel.app/break), Upstash Redis-backed, up until at least 2026-11-25 |
@@ -235,7 +249,7 @@ spider sensi
 - [x] M5 Agent with restricted function-call key + paid-API 402 flow
 - [x] M6 Worker agents, bidding, counter-offer, escrow release
 - [x] M7 Dashboard: create mandate, live receipts, approvals, attack button
-- [ ] M8 `scripts/demo.ts` runs the full demo in one command
+- [x] M8 `scripts/demo.ts` runs the full demo in one command (`npm run demo`), verified to run twice back to back
 
 ### SHOULD
 - [~] S1 Chain Signatures (experimental, feature-frozen): Vault-side `authorize_foreign_payment` implemented + proven on testnet (real tx links above); MPC signing of the actual Sepolia tx in progress, not yet completed

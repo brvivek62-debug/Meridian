@@ -25,6 +25,7 @@
     "agent:m6": "tsx agent/src/index.ts --m6",
     "demo:m5": "tsx scripts/demo-m5.ts",
     "demo:m6": "tsx scripts/demo-m6.ts",
+    "demo": "tsx scripts/demo.ts",
     "dashboard": "npm --prefix dashboard run dev",
     "typecheck": "tsc --noEmit"
   },

@@ -16,6 +16,10 @@ OWNER="${OWNER_ACCOUNT_ID:-vivek-meridian.testnet}"
 VAULT_MIN_SPENDABLE_NEAR=2
 BREAK_AGENT_MIN_NEAR=1
 DEMO_OWNER_MIN_NEAR=1
+# The owner's own wallet only ever needs gas (create_mandate/revoke/approve
+# are signed by it, but the "budget" NEAR it deposits lives in the Vault, not
+# here) — low is normal, just not too low to sign the next gas-only tx.
+OWNER_MIN_NEAR=0.02
 
 status=0
 warn() { echo "WARN: $1"; status=1; }
@@ -77,6 +81,7 @@ check_min() {
 check_min "vault.$OWNER" "$VAULT_MIN_SPENDABLE_NEAR" 1
 check_min "break-agent.$OWNER" "$BREAK_AGENT_MIN_NEAR" 0
 check_min "demo-owner.$OWNER" "$DEMO_OWNER_MIN_NEAR" 0
+check_min "$OWNER" "$OWNER_MIN_NEAR" 0
 
 echo
 if [ "$status" = "0" ]; then
