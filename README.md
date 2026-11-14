@@ -2,25 +2,45 @@
 
 **The line your agents can't cross.**
 
-Meridian gives AI agents delegated financial authority on NEAR. Funds sit in an on-chain Vault contract. Each agent gets a mandate (budget, per-transaction cap, daily cap, vendor allowlist, approval threshold) and holds only a function-call access key restricted to the Vault, so it cannot move money except through the Vault's policy checks.
+An on-chain Vault contract on NEAR enforces spending limits — budget, per-transaction cap, daily cap, vendor allowlist, approval threshold — on every payment an AI agent makes, so a compromised or prompt-injected agent still can't move money outside what it was explicitly authorized to spend.
 
-Built at NEAR HACKATHON. Tracks: `agents`, `security`, `swarms`.
+Built at NEAR HACKATHON. Tracks: `agents`, `security`, `swarms`. Status: feature-frozen for submission — see [Progress](#progress) for exactly what's done vs. in progress.
 
-**🔴 Live demo (testnet): [meridian-zeta-murex.vercel.app](https://meridian-zeta-murex.vercel.app)** — the dashboard, and [`/break`](https://meridian-zeta-murex.vercel.app/break): try to talk a real wallet-holding AI agent into paying you.
+**Live demo (testnet):** [meridian-zeta-murex.vercel.app](https://meridian-zeta-murex.vercel.app)
+**Try to break it:** [`/break`](https://meridian-zeta-murex.vercel.app/break) — a real NEAR AI Cloud tool-calling agent with a real NEAR wallet. Convince it to pay you; see whether the Vault lets it.
 
-> Status: work in progress. See [Progress](#progress).
+## Try it in 30 seconds
+
+1. Open [`/break`](https://meridian-zeta-murex.vercel.app/break) and send it a message trying to get it to pay you — a fake bug-bounty reward, a claim that you're owed a refund, anything. **See:** the agent's reply, and "the line" animation showing what it tried to do.
+2. If it decided to pay, **see:** the Vault either executes it (only if you happen to be its one allowlisted vendor — you aren't) or blocks it on-chain in real time, with the reason and a live testnet tx link. The scoreboard and "Hall of attempts" update either way — that history is kept, not reset, as proof.
+3. Open the dashboard root ([meridian-zeta-murex.vercel.app](https://meridian-zeta-murex.vercel.app)) and look at the receipts feed. **See:** every `Blocked` entry (red) is a real on-chain policy violation from past runs, not a UI mock, and the delegation tree shows the real parent → sub-mandate structure.
 
 ## Problem
 
-_TODO_
+Giving an AI agent a NEAR account's full-access key means it can sign literally any transaction — a plain transfer, a call to any contract, anything. If the agent is compromised, misconfigured, or talked into something via prompt injection (a message embedded in a task, a tool result, or a webpage it reads), there is no technical limit on what it can do with that key. The usual mitigation — not giving the agent any money at all — also means it can't do anything useful: pay for an API, hire another agent, or settle a bill.
 
 ## Solution
 
-_TODO_ — mandates, spending limits, policy engine, sandboxed wallets via function-call keys, escrow, sub-mandates, Chain Signatures, NEAR Intents (1Click).
+Funds never sit behind the agent's own key. They sit in an on-chain Vault contract. The owner funds a **mandate** for the agent: a budget, a per-transaction cap, a daily cap, a vendor allowlist, and an approval threshold for anything above a given size. The agent's NEAR account holds only a **function-call access key** scoped to the Vault contract — it cannot do a plain transfer or call anything else, full stop, enforced by NEAR's own access-key validation before a transaction ever reaches a contract (proven on-chain by `npm run prove-no-bypass`). Every `pay` the agent makes is checked against its mandate on-chain; a violation is logged as a `Blocked` receipt instead of panicking, so a blocked attempt is visible, not hidden. Agents can delegate narrower **sub-mandates** to other agents (never broader than their own), hire each other through **escrow** (post a task, collect bids, lock funds, release on delivery), and — experimentally — pay on other chains via **Chain Signatures**. The [`/break`](https://meridian-zeta-murex.vercel.app/break) page is this claim made testable: a real agent, a real wallet, try and see.
 
 ## Architecture
 
-_TODO: Mermaid diagram._
+```mermaid
+flowchart LR
+    Owner -->|create_mandate / approve / reject / revoke| Vault[(Vault contract)]
+    Agent -->|pay / post_task / accept_bid / release / create_sub_mandate| Vault
+    Vault --> Check{within mandate?}
+    Check -->|yes, under threshold| Paid[transfer + Payment receipt]
+    Check -->|yes, over threshold| Pending[PendingPayment -- owner approves/rejects]
+    Check -->|no| Blocked[Blocked receipt -- nothing moves]
+    Agent -->|create_sub_mandate: narrower only| SubAgent[sub-mandate agent, e.g. worker-summarizer]
+    SubAgent -->|pay, within its own narrower mandate| Vault
+    Paid --> Vendor[paid-api / worker-scraper / worker-summarizer]
+    Dashboard[dashboard, view-only polling] --> Vault
+    BreakAgent[break-agent, public /break, isolated mandate] -->|pay| Vault
+    Agent -.->|authorize_foreign_payment, experimental| Vault
+    Vault -.->|if Authorized| MPC[NEAR MPC signer -- Sepolia tx]
+```
 
 ```
 contracts/vault/   Rust Vault contract (near-sdk, cargo-near) → NEAR testnet
@@ -29,6 +49,14 @@ vendors/           Paid API (HTTP 402) + worker agents
 dashboard/         Next.js + Tailwind dashboard
 scripts/           Deploy, seed, demo-run scripts
 ```
+
+## NEAR features used
+
+- **Function-call access keys** — the core security mechanism (see [Problem](#problem)/[Solution](#solution) and the trust model below). Every demo account (`agent`, `worker-scraper`, `worker-summarizer`, `break-agent`, `sepolia-agent`) holds one scoped to the Vault and a specific method list, never a full-access key.
+- **NEP-297 event logs** — every receipt (`Payment`, `Pending`, `Blocked`, `EscrowLock`/`Release`, `Refund`, `Delegation`) is emitted as `EVENT_JSON:{"standard":"meridian",...}` (`contracts/vault/src/lib.rs`) in addition to being stored for view calls.
+- **NEAR AI Cloud** — the OpenAI-compatible API (`openai` npm package) powers the agent's tool-calling loop (M5/M6), `worker-summarizer`'s summarization, the public `/break` agent, and the dashboard's plain-English-to-mandate parser.
+- **Chain Signatures** (experimental, feature-frozen) — `v1.signer-prod.testnet`, via `chainsig.js`, for deriving an Ethereum Sepolia address and (once funded) signing a cross-chain payment. See the trust model below for exactly what's proven vs. in progress.
+- **NEAR Intents (1Click API)** — not implemented. Scoped as S2 in `PLAN.md` and not reached before the feature freeze; see [Roadmap](#roadmap).
 
 ## Trust model
 
@@ -229,7 +257,12 @@ Both `/break` and the main dashboard show **"the line"** (`dashboard/components/
 
 ## Roadmap
 
-_TODO_
+- **Finish Chain Signatures (S1).** Fund the derived Sepolia wallet and get one real MPC-signed Sepolia transaction end to end; move `mpc-signer` off a full-access key, either by giving it its own narrow wrapper contract around `sign()` or by moving to the fully on-chain-enforced design where the Vault contract itself calls the MPC signer (the ideal referenced in `PLAN.md`).
+- **NEAR Intents (S2), not started.** A live `/v0/tokens` + `dry: true` quote in the dashboard, and one small real mainnet swap from a dedicated dev account, as `PLAN.md` describes.
+- **Combined daily spend across a delegation tree.** Daily caps are per-mandate today; a parent and its sub-mandates can together exceed what the parent's own daily cap would suggest, though never more than the parent's total budget. Tracking this across a subtree on-chain is the natural next policy check.
+- **Storage deposits.** The Vault currently pays its own NEAR storage staking for every mandate, receipt, pending payment, task and bid, bounded only by hard caps (see [Storage cost](#storage-cost)). A NEP-145-style deposit from the caller would let those caps be relaxed.
+- **Contract upgrade governance.** `vault.vivek-meridian.testnet` keeps a deployer-held full-access key for upgrades. Removing it (freezing the code) or handing upgrades to a DAO would close that gap.
+- **Mainnet.** Everything here is testnet-only (NEAR side) and a few small mainnet-dev-account swaps (Intents side, once S2 lands); a real deployment would need a security review of the Vault contract first.
 
 ## Team
 
