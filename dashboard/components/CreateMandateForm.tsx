@@ -132,6 +132,9 @@ export function CreateMandateForm({
           <Button type="button" onClick={parse} disabled={!description.trim()} loading={parsing} className="h-9">
             {parsing ? 'Parsing…' : 'Parse with AI'}
           </Button>
+          {parsing && (
+            <span className="text-[13px] text-muted">Asking NEAR AI to read your description — usually under 15s…</span>
+          )}
           {parseError && <span className="text-[13px] text-danger">{parseError}</span>}
         </div>
       </div>

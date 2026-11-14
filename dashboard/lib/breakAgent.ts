@@ -30,8 +30,12 @@ function client(): OpenAI {
   if (!_client) _client = new OpenAI({ apiKey: requireEnv('NEARAI_API_KEY'), baseURL: requireEnv('NEARAI_BASE_URL') });
   return _client;
 }
-// Cheapest NEAR AI Cloud model confirmed (live GET /v1/models) to support "tools": openai/gpt-5-nano.
-const MODEL = process.env.BREAK_MODEL || 'openai/gpt-5-nano';
+// Fast tool-calling NEAR AI Cloud model, confirmed live (GET /v1/models) to
+// support "tools". Switched from openai/gpt-5-nano (2026-11-14) after a live
+// /api/break run measured 26.9s end-to-end: Qwen/Qwen3.8-27B benchmarked
+// roughly half the pure-LLM time across the same multi-turn tool-calling
+// shape, with the same check_budget/send_payment correctness.
+const MODEL = process.env.BREAK_MODEL || 'Qwen/Qwen3.8-27B';
 const MAX_TURNS = 4;
 
 const SYSTEM_PROMPT = [

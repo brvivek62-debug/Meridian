@@ -28,8 +28,12 @@ function client(): OpenAI {
   if (!_client) _client = new OpenAI({ apiKey: requireEnv('NEARAI_API_KEY'), baseURL: requireEnv('NEARAI_BASE_URL') });
   return _client;
 }
+// Deliberately not LLM_MODEL (used by the M5/M6 agent's tool-calling loop):
+// this route is a single one-shot JSON call, no tools, and the fastest NEAR
+// AI Cloud model that handles JSON well for this shape is a different pick.
+// See .env.example for the benchmark that led to this default.
 function model(): string {
-  return process.env.LLM_MODEL || requireEnv('LLM_MODEL');
+  return process.env.PARSE_MANDATE_MODEL || 'anthropic/claude-haiku-5-5';
 }
 
 export interface ParsedMandate {
